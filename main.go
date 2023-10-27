@@ -42,17 +42,17 @@ func main() {
 	defer file.Close()
 
 	db.InitDatabase(cfg)
-	router := registerServices()
+	router := registerServices(cfg)
 	boot.RunHttpServer(router, cfg.General.BindAddress)
 }
 
 //=============================================================================
 
-func registerServices() *gin.Engine {
+func registerServices(cfg *config.Config) *gin.Engine {
 
 	log.Println("Registering services...")
 	router := gin.Default()
-	service.Init(router)
+	service.Init(router, cfg)
 
 	return router
 }
