@@ -1,0 +1,13 @@
+general:
+  logFile: log/data-collector.log
+  bindAddress: :8446
+database:
+  address: localhost:3402
+  name: collector
+  username: bitfever
+  password: bitfever
+data:
+  org: BitFever
+  url: http://localhost:3410
+  bucket: symbol-data
+  token: xdtSqXm2-9Sl7_dpnXx5yQqEbglhklw3KRQDd_0Zj-Vyo-x0sjxbCI4K_wbtyq_xzbn9I4xd9KzAZd7vYlORIQ==
