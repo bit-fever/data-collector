@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2023 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,35 +26,37 @@ package main
 
 import (
 	"github.com/bit-fever/core/boot"
+	"github.com/bit-fever/core/req"
+	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/bit-fever/data-collector/pkg/db"
-	"github.com/bit-fever/data-collector/pkg/model/config"
+	"github.com/bit-fever/data-collector/pkg/ds"
 	"github.com/bit-fever/data-collector/pkg/service"
-	"github.com/gin-gonic/gin"
-	"log"
+	"log/slog"
 )
 
 //=============================================================================
 
-func main() {
-	cfg := &config.Config{}
-	boot.ReadConfig("data-collector", cfg)
-	file := boot.InitLogs(cfg.General.LogFile)
-	defer file.Close()
+const component = "data-collector"
 
-	db.InitDatabase(cfg)
-	router := registerServices(cfg)
-	boot.RunHttpServer(router, cfg.General.BindAddress)
+//=============================================================================
+
+func main() {
+	cfg := &app.Config{}
+	boot.ReadConfig(component, cfg)
+	logger := boot.InitLogger(component, &cfg.Application)
+	engine := boot.InitEngine(logger,    &cfg.Application)
+	initClients()
+	db.InitDatabase(&cfg.Database)
+	ds.InitDatastore(&cfg.Data)
+	service.Init(engine, cfg, logger)
+	boot.RunHttpServer(engine, &cfg.Application)
 }
 
 //=============================================================================
 
-func registerServices(cfg *config.Config) *gin.Engine {
-
-	log.Println("Registering services...")
-	router := gin.Default()
-	service.Init(router, cfg)
-
-	return router
+func initClients() {
+	slog.Info("Initializing clients...")
+	req.AddClient("bf", "ca.crt", "server.crt", "server.key")
 }
 
 //=============================================================================

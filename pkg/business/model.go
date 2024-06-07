@@ -22,54 +22,24 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
-
-import (
-	"github.com/bit-fever/core"
-	"gorm.io/driver/mysql"
-	"log/slog"
-	"time"
-
-	"gorm.io/gorm"
-)
+package business
 
 //=============================================================================
-
-var dbms *gorm.DB
-
+//===
+//=== ProductData composite structs
+//===
 //=============================================================================
 
-func InitDatabase(cfg *core.Database) {
-
-	slog.Info("Starting database...")
-	url := cfg.Username + ":" + cfg.Password + "@tcp(" + cfg.Address + ")/" + cfg.Name + "?charset=utf8mb4&parseTime=True"
-
-	dialector := mysql.New(mysql.Config{
-		DSN:                       url,
-		DefaultStringSize:         256,
-		DisableDatetimePrecision:  false,
-		DontSupportRenameIndex:    false,
-		DontSupportRenameColumn:   true,
-		SkipInitializeWithVersion: false,
-	})
-
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		core.ExitWithMessage("Failed to connect to the database: "+ err.Error())
-	}
-
-	sqlDB, err := db.DB()
-	sqlDB.SetConnMaxLifetime(time.Minute * 3)
-	sqlDB.SetMaxOpenConns(50)
-	sqlDB.SetMaxIdleConns(10)
-
-	dbms = db
+type DatafileUploadSpec struct {
+	Symbol         string `json:"symbol"         binding:"required"`
+	Name           string `json:"name"           binding:"required"`
+	ExpirationDate int    `json:"expirationDate"`
 }
 
 //=============================================================================
 
-func RunInTransaction(f func(tx *gorm.DB) error) error {
-	return dbms.Transaction(f)
+type DatafileUploadResponse struct {
+
 }
 
 //=============================================================================

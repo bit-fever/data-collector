@@ -22,54 +22,51 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
-
-import (
-	"github.com/bit-fever/core"
-	"gorm.io/driver/mysql"
-	"log/slog"
-	"time"
-
-	"gorm.io/gorm"
-)
+package messaging
 
 //=============================================================================
 
-var dbms *gorm.DB
-
-//=============================================================================
-
-func InitDatabase(cfg *core.Database) {
-
-	slog.Info("Starting database...")
-	url := cfg.Username + ":" + cfg.Password + "@tcp(" + cfg.Address + ")/" + cfg.Name + "?charset=utf8mb4&parseTime=True"
-
-	dialector := mysql.New(mysql.Config{
-		DSN:                       url,
-		DefaultStringSize:         256,
-		DisableDatetimePrecision:  false,
-		DontSupportRenameIndex:    false,
-		DontSupportRenameColumn:   true,
-		SkipInitializeWithVersion: false,
-	})
-
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		core.ExitWithMessage("Failed to connect to the database: "+ err.Error())
-	}
-
-	sqlDB, err := db.DB()
-	sqlDB.SetConnMaxLifetime(time.Minute * 3)
-	sqlDB.SetMaxOpenConns(50)
-	sqlDB.SetMaxIdleConns(10)
-
-	dbms = db
+type ProductData struct {
+	Id            uint    `json:"id"`
+	ConnectionId  uint    `json:"connectionId"`
+	ExchangeId    uint    `json:"exchangeId"`
+	Username      string  `json:"username"`
+	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
+	Increment     float64 `json:"increment"`
 }
 
 //=============================================================================
 
-func RunInTransaction(f func(tx *gorm.DB) error) error {
-	return dbms.Transaction(f)
+type Connection struct {
+	Id                   uint    `json:"id"`
+	Username             string  `json:"username"`
+	Code                 string  `json:"code"`
+	Name                 string  `json:"name"`
+	SystemCode           string  `json:"systemCode"`
+	SystemName           string  `json:"systemName"`
+	InstanceCode         string  `json:"instanceCode"`
+	SupportsData         bool    `json:"supportsData"`
+	SupportsMultipleData bool    `json:"supportsMultipleData"`
+	SupportsInventory    bool    `json:"supportsInventory"`
+}
+
+//=============================================================================
+
+type Exchange struct {
+	Id         uint   `json:"id"`
+	CurrencyId uint   `json:"currencyId"`
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	Timezone   string `json:"timezone"`
+}
+
+//=============================================================================
+
+type ProductDataMessage struct {
+	ProductData ProductData `json:"productData"`
+	Connection  Connection  `json:"connection"`
+	Exchange    Exchange    `json:"exchange"`
 }
 
 //=============================================================================

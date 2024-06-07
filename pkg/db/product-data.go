@@ -25,51 +25,37 @@ THE SOFTWARE.
 package db
 
 import (
-	"github.com/bit-fever/core"
-	"gorm.io/driver/mysql"
-	"log/slog"
-	"time"
-
+	"github.com/bit-fever/core/req"
 	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-var dbms *gorm.DB
+func GetProductDataById(tx *gorm.DB, id uint) (*ProductData, error) {
+	var list []ProductData
+	res := tx.Find(&list, id)
 
-//=============================================================================
-
-func InitDatabase(cfg *core.Database) {
-
-	slog.Info("Starting database...")
-	url := cfg.Username + ":" + cfg.Password + "@tcp(" + cfg.Address + ")/" + cfg.Name + "?charset=utf8mb4&parseTime=True"
-
-	dialector := mysql.New(mysql.Config{
-		DSN:                       url,
-		DefaultStringSize:         256,
-		DisableDatetimePrecision:  false,
-		DontSupportRenameIndex:    false,
-		DontSupportRenameColumn:   true,
-		SkipInitializeWithVersion: false,
-	})
-
-	db, err := gorm.Open(dialector, &gorm.Config{})
-	if err != nil {
-		core.ExitWithMessage("Failed to connect to the database: "+ err.Error())
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	sqlDB, err := db.DB()
-	sqlDB.SetConnMaxLifetime(time.Minute * 3)
-	sqlDB.SetMaxOpenConns(50)
-	sqlDB.SetMaxIdleConns(10)
+	if len(list) == 1 {
+		return &list[0], nil
+	}
 
-	dbms = db
+	return nil, nil
 }
 
 //=============================================================================
 
-func RunInTransaction(f func(tx *gorm.DB) error) error {
-	return dbms.Transaction(f)
+func AddProductData(tx *gorm.DB, ts *ProductData) error {
+	return tx.Create(ts).Error
+}
+
+//=============================================================================
+
+func UpdateProductData(tx *gorm.DB, ts *ProductData) {
+	tx.Updates(ts)
 }
 
 //=============================================================================

@@ -22,30 +22,61 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package config
+package db
+
+import (
+	"github.com/bit-fever/core/req"
+	"gorm.io/gorm"
+)
 
 //=============================================================================
 
-type Config struct {
-	General struct {
-		LogFile     string
-		BindAddress string
+func GetInstrumentsByDataId(tx *gorm.DB, id uint) (*[]InstrumentData, error) {
+	var list []InstrumentData
+
+	filter := map[string]any{}
+	filter["product_data_id"] = id
+
+	res := tx.Where(filter).Order("expiration_date").Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	Database struct {
-		Address  string
-		Name     string
-		Username string
-		Password string
+	return &list, nil
+}
+
+//=============================================================================
+
+func GetInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*InstrumentData, error) {
+	filter := map[string]any{}
+	filter["product_data_id"] = productId
+	filter["symbol"]          = symbol
+
+	var list []InstrumentData
+	res := tx.Where(filter).Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	Data struct {
-		Org    string
-		Url    string
-		Bucket string
-		Token  string
+	if len(list) == 1 {
+		return &list[0], nil
 	}
 
+	return nil, nil
+}
+
+//=============================================================================
+
+func AddInstrumentData(tx *gorm.DB, data *InstrumentData) error {
+	return tx.Create(data).Error
+}
+
+//=============================================================================
+
+func UpdateInstrumentData(tx *gorm.DB, data *InstrumentData) error {
+	return tx.Updates(data).Error
 }
 
 //=============================================================================

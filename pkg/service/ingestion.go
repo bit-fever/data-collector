@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2022 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@ import (
 	//"github.com/bit-fever/data-collector/pkg/model"
 	//"github.com/bit-fever/data-collector/pkg/model/config"
 	//"github.com/bit-fever/data-collector/pkg/model/config/data"
-	"github.com/gin-gonic/gin"
+	"github.com/bit-fever/core/auth"
 	//influx "github.com/influxdata/influxdb-client-go/v2"
 	//"github.com/spf13/viper"
 	//"net/http"
@@ -36,7 +36,7 @@ import (
 
 //=============================================================================
 
-func IngestData(c *gin.Context) {
+func ingestData(c *auth.Context) {
 	//dataMap := viper.GetStringMapString(config.Data)
 	//
 	//org := dataMap[data.Org]

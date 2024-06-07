@@ -1,11 +1,22 @@
-general:
-  logFile: log/data-collector.log
+application:
   bindAddress: :8446
+  production: false
+  debug: false
 database:
   address: localhost:3402
   name: collector
   username: bitfever
   password: bitfever
+authentication:
+  authority: https://bitfever-server:8443/auth/realms/bitfever
+  clientId: bitfever-backend
+  clientSecret: xyz
+platform:
+  system: https://bitfever-server:8449/api/system
+messaging:
+  address: localhost:8450
+  username: rabbit-admin
+  password: rabbit.admin
 data:
   org: BitFever
   url: http://localhost:3410

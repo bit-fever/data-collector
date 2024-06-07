@@ -25,79 +25,99 @@ THE SOFTWARE.
 package ds
 
 import (
-	"github.com/bit-fever/data-collector/pkg/model/config"
+	"context"
+	"fmt"
+	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/influxdata/influxdb-client-go/v2/api/write"
 	"log"
+	"time"
 )
 
 //=============================================================================
+
+//--- Fields
+
+const Open   = "open"
+const Close  = "close"
+const High   = "high"
+const Low    = "low"
+const Volume = "volume"
+
+//--- Tags
+
+const ConnCode   = "connCode"
+const SystemCode = "sysCode"
+const User       = "user"
+
+//--- Variables
+
 var client   influxdb2.Client
 var queryAPI api.QueryAPI
-var writeAPI api.WriteAPI
+var writeAPI api.WriteAPIBlocking
 
 //=============================================================================
 
-func InitDatastore(cfg *config.Config) {
+func InitDatastore(data *app.Data) {
 
 	log.Println("Starting datastore...")
 
-	client   = influxdb2.NewClient(cfg.Data.Url, cfg.Data.Token)
-	queryAPI = client.QueryAPI(cfg.Data.Org)
-	writeAPI = client.WriteAPI(cfg.Data.Org, cfg.Data.Bucket)
+	client   = influxdb2.NewClient(data.Url, data.Token)
+	queryAPI = client.QueryAPI(data.Org)
+	writeAPI = client.WriteAPIBlocking(data.Org, data.Bucket)
 }
 
 //=============================================================================
 
-//for value := 0; value < 5; value++ {
-//tags := map[string]string{
-//"tagname1": "tagvalue1",
-//}
-//fields := map[string]interface{}{
-//"field1": value,
-//}
-//point := write.NewPoint("measurement1", tags, fields, time.Now())
-//time.Sleep(1 * time.Second) // separate points by 1 second
-//
-//if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-//log.Fatal(err)
-//}
-//}
+func LoadData() {
 
 
+	query := `from(bucket: "symbol-data")
+            |> range(start: -10m)
+            |> filter(fn: (r) => r._measurement == "measurement1")`
+	results, err := queryAPI.Query(context.Background(), query)
 
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	for results.Next() {
+		fmt.Println(results.Record())
+	}
 
-//queryAPI := client.QueryAPI(org)
-//query := `from(bucket: "<BUCKET>")
-//            |> range(start: -10m)
-//            |> filter(fn: (r) => r._measurement == "measurement1")`
-//results, err := queryAPI.Query(context.Background(), query)
-//if err != nil {
-//log.Fatal(err)
-//}
-//for results.Next() {
-//fmt.Println(results.Record())
-//}
-//if err := results.Err(); err != nil {
-//log.Fatal(err)
-//}
+	if err := results.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
 
+//=============================================================================
 
+func WriteData(symbol string, timestamp time.Time, open, close, high, low float64, volume int,
+				connCode, systemCode, user string) error {
 
+	tags := map[string]string{
+		ConnCode  : connCode,
+		SystemCode: systemCode,
+		User      : user,
+	}
 
+	fields := map[string]interface{}{
+		Open  : open,
+		Close : close,
+		High  : high,
+		Low   : low,
+		Volume: volume,
+	}
 
-//query = `from(bucket: "<BUCKET>")
-//              |> range(start: -10m)
-//              |> filter(fn: (r) => r._measurement == "measurement1")
-//              |> mean()`
-//results, err = queryAPI.Query(context.Background(), query)
-//if err != nil {
-//log.Fatal(err)
-//}
-//for results.Next() {
-//fmt.Println(results.Record())
-//}
-//if err := results.Err(); err != nil {
-//log.Fatal(err)
-//}
+	point := write.NewPoint(symbol, tags, fields, timestamp)
+	err   := writeAPI.WritePoint(context.Background(), point)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return err
+}
+
+//=============================================================================
