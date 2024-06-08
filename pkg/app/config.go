@@ -34,6 +34,8 @@ type Config struct {
 	core.Application
 	core.Database
 	core.Authentication
+	core.Platform
+	core.Messaging
 	Data
 }
 

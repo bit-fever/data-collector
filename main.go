@@ -26,8 +26,10 @@ package main
 
 import (
 	"github.com/bit-fever/core/boot"
+	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/core/req"
 	"github.com/bit-fever/data-collector/pkg/app"
+	"github.com/bit-fever/data-collector/pkg/core/messaging"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"github.com/bit-fever/data-collector/pkg/service"
@@ -48,7 +50,9 @@ func main() {
 	initClients()
 	db.InitDatabase(&cfg.Database)
 	ds.InitDatastore(&cfg.Data)
+	msg.InitMessaging(&cfg.Messaging)
 	service.Init(engine, cfg, logger)
+	messaging.InitMessageListener()
 	boot.RunHttpServer(engine, &cfg.Application)
 }
 
