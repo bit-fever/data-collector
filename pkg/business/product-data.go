@@ -25,10 +25,12 @@ THE SOFTWARE.
 package business
 
 import (
-	"bufio"
+	"errors"
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/core/req"
+	"github.com/bit-fever/data-collector/pkg/business/upload"
 	"github.com/bit-fever/data-collector/pkg/db"
+	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 	"mime/multipart"
 	"time"
@@ -36,69 +38,76 @@ import (
 
 //=============================================================================
 
-func GetInstrumentDataByProductId(tx *gorm.DB, c *auth.Context, id uint)(*[]db.InstrumentData, error) {
-	return db.GetInstrumentsByDataId(tx, id)
+func GetInstrumentDataBySourceId(tx *gorm.DB, c *auth.Context, sourceId uint)(*[]db.InstrumentData, error) {
+	return db.GetInstrumentsBySourceId(tx, sourceId)
 }
 
 //=============================================================================
 
-func PrepareForUpload(tx *gorm.DB, c *auth.Context, productId uint, spec *DatafileUploadSpec) (*db.InstrumentData, error) {
-	c.Log.Info("PrepareForUpload: Creating instrument for a product for data", "productId", productId, "symbol", spec.Symbol)
+func PrepareForUpload(tx *gorm.DB, c *auth.Context, sourceId uint, spec *DatafileUploadSpec) (*db.InstrumentData, *db.ProductData, error) {
+	c.Log.Info("PrepareForUpload: Creating instrument for a product for data", "sourceId", sourceId, "symbol", spec.Symbol)
 
-	_, err := getProductDataAndCheckAccess(tx, c, productId, "PrepareForUpload")
+	pd, err := getProductDataAndCheckAccess(tx, c, sourceId, "PrepareForUpload")
 	if err != nil {
-		return nil, err
+		return nil, nil,err
 	}
 
-	data, err := db.GetInstrumentBySymbol(tx, productId, spec.Symbol)
+	data, err := db.GetInstrumentBySymbol(tx, pd.Id, spec.Symbol)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if data == nil {
 		data = &db.InstrumentData{
-			ProductDataId : productId,
+			ProductDataId : pd.Id,
 			Symbol        : spec.Symbol,
 			Name          : spec.Name,
-			ExpirationDate: spec.ExpirationDate,
-			IsContinuous  : spec.ExpirationDate == 0,
+			IsContinuous  : spec.Continuous,
 		}
 
 		err = db.AddInstrumentData(tx, data)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
-		data.Name           = spec.Name
-		data.ExpirationDate = spec.ExpirationDate
-		data.IsContinuous   = spec.ExpirationDate == 0
+		data.Name         = spec.Name
+		data.IsContinuous = spec.Continuous
 
 		err = db.UpdateInstrumentData(tx, data)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return data, nil
+	return data, pd, nil
 }
 
 //=============================================================================
 
-func UploadInstrumentData(c *auth.Context, instrData *db.InstrumentData, part *multipart.Part) (*DatafileUploadResponse, error) {
-	scanner := bufio.NewScanner(part)
-
-	for scanner.Scan() {
-		//fmt.Println(scanner.Text())
-		time.Sleep(time.Microsecond * 5)
-	}
-
-	if err := scanner.Err(); err != nil {
+func UploadInstrumentData(c *auth.Context, spec *DatafileUploadSpec, instrData *db.InstrumentData, prodData *db.ProductData, part *multipart.Part) (*DatafileUploadResponse, error) {
+	parser, err  := upload.NewParser(spec.Parser)
+	if err != nil {
 		return nil, err
 	}
 
-	c.Log.Info("Done.")
+	loc,err := retrieveLocation(spec, prodData)
+	if err != nil {
+		return nil, err
+	}
 
+	config := createConfig(instrData, prodData)
+	_, err = parser.Parse(part, config, loc)
+	_ = part.Close()
+
+	if err != nil {
+		c.Log.Info("UploadInstrumentData: Parser error --> "+ err.Error())
+		return nil, err
+	}
+
+	//--- Update stats info
+
+	c.Log.Info("UploadInstrumentData: Upload completed")
 	return &DatafileUploadResponse{}, nil
 }
 
@@ -108,8 +117,8 @@ func UploadInstrumentData(c *auth.Context, instrData *db.InstrumentData, part *m
 //===
 //=============================================================================
 
-func getProductDataAndCheckAccess(tx *gorm.DB, c *auth.Context, id uint, function string) (*db.ProductData, error) {
-	pd, err := db.GetProductDataById(tx, id)
+func getProductDataAndCheckAccess(tx *gorm.DB, c *auth.Context, sourceId uint, function string) (*db.ProductData, error) {
+	pd, err := db.GetProductDataBySourceId(tx, sourceId)
 
 	if err != nil {
 		c.Log.Error(function +": Could not retrieve product for data", "error", err.Error())
@@ -117,18 +126,50 @@ func getProductDataAndCheckAccess(tx *gorm.DB, c *auth.Context, id uint, functio
 	}
 
 	if pd == nil {
-		c.Log.Error(function +": Product for data was not found", "id", id)
-		return nil, req.NewNotFoundError("Product for data was not found: %v", id)
+		c.Log.Error(function +": Product for data was not found", "sourceId", sourceId)
+		return nil, req.NewNotFoundError("Product for data was not found: %v", sourceId)
 	}
 
 	if ! c.Session.IsAdmin() {
 		if pd.Username != c.Session.Username {
-			c.Log.Error(function +": Product for data not owned by user", "id", id)
-			return nil, req.NewForbiddenError("Product for data is not owned by user: %v", id)
+			c.Log.Error(function +": Product for data not owned by user", "sourceId", sourceId)
+			return nil, req.NewForbiddenError("Product for data is not owned by user: %v", sourceId)
 		}
 	}
 
 	return pd, nil
+}
+
+//=============================================================================
+
+func retrieveLocation(spec *DatafileUploadSpec, pd *db.ProductData) (*time.Location, error){
+	if spec.Timezone == "gmt" {
+		return time.UTC, nil
+	}
+
+	if spec.Timezone == "exc" {
+		return time.LoadLocation(pd.Timezone)
+	}
+
+	return nil, errors.New("Unknown timezone type: "+ spec.Timezone)
+}
+
+//=============================================================================
+
+func createConfig(instrData *db.InstrumentData, prodData *db.ProductData) *ds.DataConfig {
+	config := ds.DataConfig{
+		SystemCode    : prodData.SystemCode,
+		ConnectionCode: prodData.ConnectionCode,
+		Username      : prodData.Username,
+		Symbol        : instrData.Symbol,
+	}
+
+	if ! prodData.SupportsMultipleData {
+		config.ConnectionCode = "*"
+		config.Username       = "*"
+	}
+
+	return &config
 }
 
 //=============================================================================

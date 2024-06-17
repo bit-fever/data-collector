@@ -48,6 +48,26 @@ func GetProductDataById(tx *gorm.DB, id uint) (*ProductData, error) {
 
 //=============================================================================
 
+func GetProductDataBySourceId(tx *gorm.DB, sourceId uint) (*ProductData, error) {
+	filter := map[string]any{}
+	filter["source_id"] = sourceId
+
+	var list []ProductData
+	res := tx.Where(filter).Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	if len(list) == 1 {
+		return &list[0], nil
+	}
+
+	return nil, nil
+}
+
+//=============================================================================
+
 func AddProductData(tx *gorm.DB, ts *ProductData) error {
 	return tx.Create(ts).Error
 }

@@ -31,13 +31,17 @@ import (
 
 //=============================================================================
 
-func GetInstrumentsByDataId(tx *gorm.DB, id uint) (*[]InstrumentData, error) {
+func GetInstrumentsBySourceId(tx *gorm.DB, sourceId uint) (*[]InstrumentData, error) {
 	var list []InstrumentData
 
 	filter := map[string]any{}
-	filter["product_data_id"] = id
+	filter["source_id"] = sourceId
 
-	res := tx.Where(filter).Order("expiration_date").Find(&list)
+	res := tx.
+			Where(filter).
+			Joins("JOIN product_data pd ON pd.id = product_data_id").
+			Order("expiration_date").
+			Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)

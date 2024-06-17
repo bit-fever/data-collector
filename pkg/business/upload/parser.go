@@ -22,26 +22,52 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package business
+package upload
+
+import (
+	"errors"
+	"github.com/bit-fever/data-collector/pkg/ds"
+	"io"
+	"time"
+)
 
 //=============================================================================
-//===
-//=== ProductData composite structs
-//===
+
+const TradestationCode = "tsa"
+const TradestationName = "Tradestation (ASCII)"
+
 //=============================================================================
 
-type DatafileUploadSpec struct {
-	Symbol         string `json:"symbol"     binding:"required"`
-	Name           string `json:"name"       binding:"required"`
-	Continuous     bool   `json:"continuous" binding:"required"`
-	Timezone       string `json:"timezone"   binding:"required"`
-	Parser         string `json:"parser"     binding:"required"`
+type ParserStats struct {
+	Records uint
+	fromDay int
+	toDay   int
 }
 
 //=============================================================================
 
-type DatafileUploadResponse struct {
+type Parser interface {
+	Parse(r io.Reader, config *ds.DataConfig, loc *time.Location) (*ParserStats, error)
+}
 
+//=============================================================================
+
+func GetParsers() map[string]string {
+	var res = map[string]string{}
+
+	res[TradestationCode] = TradestationName
+
+	return res
+}
+
+//=============================================================================
+
+func NewParser(code string) (Parser, error) {
+	switch code {
+		case TradestationCode: return &TradestationParser{}, nil
+	}
+
+	return nil, errors.New("Unknown parser type : "+ code)
 }
 
 //=============================================================================

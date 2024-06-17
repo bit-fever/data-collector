@@ -36,12 +36,12 @@ import (
 
 //=============================================================================
 
-func getInstrumentDataByProductId(c *auth.Context) {
+func getInstrumentDataBySourceId(c *auth.Context) {
 	pdId, err := c.GetIdFromUrl()
 
 	if err == nil {
 		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			list, err := business.GetInstrumentDataByProductId(tx, c, pdId)
+			list, err := business.GetInstrumentDataBySourceId(tx, c, pdId)
 
 			if err != nil {
 				return err
@@ -57,28 +57,32 @@ func getInstrumentDataByProductId(c *auth.Context) {
 //=============================================================================
 
 func uploadInstrumentData(c *auth.Context) {
-	pdId, err := c.GetIdFromUrl()
+	sourceId, err := c.GetIdFromUrl()
 
 	if err == nil {
-		reader, err := c.Gin.Request.MultipartReader()
+		var reader *multipart.Reader
+		reader, err = c.Gin.Request.MultipartReader()
 
 		if err == nil {
 			var part *multipart.Part
 
 			if part, err = reader.NextPart(); err != io.EOF {
-				spec, err := retrieveUploadSpec(part)
+				var spec *business.DatafileUploadSpec
+				spec, err = retrieveUploadSpec(part)
 
 				if err == nil {
 					if part, err = reader.NextPart(); err != io.EOF {
 						var instrData *db.InstrumentData
+						var prodData  *db.ProductData
 
 						err = db.RunInTransaction(func(tx *gorm.DB) error {
-							instrData, err = business.PrepareForUpload(tx, c, pdId, spec)
+							instrData, prodData, err = business.PrepareForUpload(tx, c, sourceId, spec)
 							return err
 						})
 
 						if err == nil {
-							response, err := business.UploadInstrumentData(c, instrData, part)
+							var response *business.DatafileUploadResponse
+							response, err = business.UploadInstrumentData(c, spec, instrData, prodData, part)
 
 							if err == nil {
 								_ = part.Close()

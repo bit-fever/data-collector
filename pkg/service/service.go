@@ -39,11 +39,12 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 
 	ctrl := auth.NewOidcController(cfg.Authentication.Authority, req.GetClient("bf"), logger, cfg)
 
+	router.GET ("/api/collector/v1/config/parsers",               ctrl.Secure(getParsers,   roles.Admin_User_Service))
 	router.GET ("/api/collector/v1/data",                         ctrl.Secure(getData,      roles.Admin_User_Service))
 	router.POST("/api/collector/v1/data/:id/filters",             ctrl.Secure(ingestData,   roles.Admin_User_Service))
 
-	router.GET ("/api/collector/v1/product-data/:id/instruments", ctrl.Secure(getInstrumentDataByProductId, roles.Admin_User_Service))
-	router.POST("/api/collector/v1/product-data/:id/instruments", ctrl.Secure(uploadInstrumentData,         roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/product-data/:id/instruments", ctrl.Secure(getInstrumentDataBySourceId, roles.Admin_User_Service))
+	router.POST("/api/collector/v1/product-data/:id/instruments", ctrl.Secure(uploadInstrumentData,        roles.Admin_User_Service))
 }
 
 //=============================================================================

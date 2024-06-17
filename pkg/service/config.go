@@ -22,26 +22,18 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package business
+package service
 
-//=============================================================================
-//===
-//=== ProductData composite structs
-//===
-//=============================================================================
-
-type DatafileUploadSpec struct {
-	Symbol         string `json:"symbol"     binding:"required"`
-	Name           string `json:"name"       binding:"required"`
-	Continuous     bool   `json:"continuous" binding:"required"`
-	Timezone       string `json:"timezone"   binding:"required"`
-	Parser         string `json:"parser"     binding:"required"`
-}
+import (
+	"github.com/bit-fever/core/auth"
+	"github.com/bit-fever/data-collector/pkg/business/upload"
+)
 
 //=============================================================================
 
-type DatafileUploadResponse struct {
-
+func getParsers(c *auth.Context) {
+	res := upload.GetParsers()
+	_= c.ReturnObject(res)
 }
 
 //=============================================================================

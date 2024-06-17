@@ -32,6 +32,7 @@ import (
 	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
 	"log"
+	"log/slog"
 	"time"
 )
 
@@ -59,6 +60,26 @@ var writeAPI api.WriteAPIBlocking
 
 //=============================================================================
 
+type DataConfig struct {
+	SystemCode     string
+	ConnectionCode string
+	Username       string
+	Symbol         string
+}
+
+//=============================================================================
+
+type DataPoint struct {
+	Timestamp time.Time
+	Open      float64
+	High      float64
+	Low       float64
+	Close     float64
+	Volume    int
+}
+
+//=============================================================================
+
 func InitDatastore(data *app.Data) {
 
 	log.Println("Starting datastore...")
@@ -66,6 +87,7 @@ func InitDatastore(data *app.Data) {
 	client   = influxdb2.NewClient(data.Url, data.Token)
 	queryAPI = client.QueryAPI(data.Org)
 	writeAPI = client.WriteAPIBlocking(data.Org, data.Bucket)
+	writeAPI.EnableBatching()
 }
 
 //=============================================================================
@@ -93,31 +115,36 @@ func LoadData() {
 
 //=============================================================================
 
-func WriteData(symbol string, timestamp time.Time, open, close, high, low float64, volume int,
-				connCode, systemCode, user string) error {
+func WriteData(dp *DataPoint, config *DataConfig) error {
 
 	tags := map[string]string{
-		ConnCode  : connCode,
-		SystemCode: systemCode,
-		User      : user,
+		ConnCode  : config.ConnectionCode,
+		SystemCode: config.SystemCode,
+		User      : config.Username,
 	}
 
 	fields := map[string]interface{}{
-		Open  : open,
-		Close : close,
-		High  : high,
-		Low   : low,
-		Volume: volume,
+		Open  : dp.Open,
+		Close : dp.Close,
+		High  : dp.High,
+		Low   : dp.Low,
+		Volume: dp.Volume,
 	}
 
-	point := write.NewPoint(symbol, tags, fields, timestamp)
+	point := write.NewPoint(config.Symbol, tags, fields, dp.Timestamp)
 	err   := writeAPI.WritePoint(context.Background(), point)
 
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("WriteData: Got an error while writing a point --> " +err.Error())
 	}
 
 	return err
+}
+
+//=============================================================================
+
+func Flush() {
+	writeAPI.Flush(context.Background())
 }
 
 //=============================================================================
