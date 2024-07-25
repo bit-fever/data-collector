@@ -31,17 +31,18 @@ package business
 //=============================================================================
 
 type DatafileUploadSpec struct {
-	Symbol         string `json:"symbol"     binding:"required"`
-	Name           string `json:"name"       binding:"required"`
-	Continuous     bool   `json:"continuous" binding:"required"`
-	Timezone       string `json:"timezone"   binding:"required"`
-	Parser         string `json:"parser"     binding:"required"`
+	Symbol        string `json:"symbol"       binding:"required"`
+	Name          string `json:"name"         binding:"required"`
+	Continuous    bool   `json:"continuous"   binding:"required"`
+	FileTimezone  string `json:"fileTimezone" binding:"required"`
+	Parser        string `json:"parser"       binding:"required"`
 }
 
 //=============================================================================
 
 type DatafileUploadResponse struct {
-
+	Duration int   `json:"duration"`
+	Bytes    int64 `json:"bytes"`
 }
 
 //=============================================================================

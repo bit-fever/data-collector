@@ -22,52 +22,67 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package upload
+package update
 
 import (
-	"errors"
-	"github.com/bit-fever/data-collector/pkg/ds"
-	"io"
-	"time"
+	"encoding/json"
+	"github.com/bit-fever/core/msg"
+	"github.com/bit-fever/data-collector/pkg/db"
+	"gorm.io/gorm"
+	"log/slog"
 )
 
 //=============================================================================
 
-const TradestationCode = "tsa"
-const TradestationName = "Tradestation (ASCII)"
+func HandleUpdateMessage(m *msg.Message) bool {
 
-//=============================================================================
+	slog.Info("New message received", "origin", m.Origin, "type", m.Type, "source", m.Source)
 
-type ParserStats struct {
-	Records uint
-	fromDay int
-	toDay   int
-}
+	if m.Origin == msg.OriginDb {
+		if m.Source == msg.SourceProductData {
+			pdm := ProductDataMessage{}
+			err := json.Unmarshal(m.Entity, &pdm)
+			if err != nil {
+				slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
+				return true
+			}
 
-//=============================================================================
-
-type Parser interface {
-	Parse(r io.Reader, config *ds.DataConfig, loc *time.Location) (*ParserStats, error)
-}
-
-//=============================================================================
-
-func GetParsers() map[string]string {
-	var res = map[string]string{}
-
-	res[TradestationCode] = TradestationName
-
-	return res
-}
-
-//=============================================================================
-
-func NewParser(code string) (Parser, error) {
-	switch code {
-		case TradestationCode: return &TradestationParser{}, nil
+			if m.Type == msg.TypeCreate {
+				return addProduct(&pdm)
+			}
+		}
 	}
 
-	return nil, errors.New("Unknown parser type : "+ code)
+	slog.Error("Dropping message with unknown origin/type!", "origin", m.Origin, "type", m.Type)
+	return true
+}
+
+//=============================================================================
+
+func addProduct(pdm *ProductDataMessage) bool {
+	slog.Info("addProduct: Product for data change received", "sourceId", pdm.ProductData.Id)
+
+	err := db.RunInTransaction(func(tx *gorm.DB) error {
+		pd := &db.Product{}
+
+		pd.SourceId             = pdm.ProductData.Id
+		pd.Symbol               = pdm.ProductData.Symbol
+		pd.Username             = pdm.ProductData.Username
+		pd.SystemCode           = pdm.Connection.SystemCode
+		pd.ConnectionCode       = pdm.Connection.Code
+		pd.SupportsMultipleData = pdm.Connection.SupportsMultipleData
+		pd.Timezone             = pdm.Exchange.Timezone
+
+		return db.AddProduct(tx, pd)
+	})
+
+	if err != nil {
+		slog.Error("Raised error while processing message")
+	} else {
+		slog.Info("addProduct: Operation complete")
+	}
+
+	return err == nil
 }
 
 //=============================================================================

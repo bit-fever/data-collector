@@ -22,43 +22,53 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package service
+package ds
 
 import (
-	//"context"
-	//"fmt"
-	//"github.com/bit-fever/data-collector/pkg/model"
-	//"github.com/bit-fever/data-collector/pkg/model/config"
-	//"github.com/bit-fever/data-collector/pkg/model/config/data"
-	//influx "github.com/influxdata/influxdb-client-go/v2"
-	//"github.com/spf13/viper"
-	//"net/http"
-	"github.com/bit-fever/core/auth"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
 )
 
 //=============================================================================
 
-func getData(c *auth.Context) {
-	//dataMap := viper.GetStringMapString(config.Data)
-	//
-	//org := dataMap[data.Org]
-	//url := dataMap[data.Url]
-	//bucket := dataMap[data.Bucket]
-	//token := dataMap[data.Token]
-	//
-	//queryAPI := client.QueryAPI(org)
-	//query := fmt.Sprintf(`from(bucket: "%v") |> range(start: -1d)`, bucket)
-	//result, err := queryAPI.Query(context.Background(), query)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//for result.Next() {
-	//	record := result.Record()
-	//	fmt.Printf("%v %v: %v=%v\n", record.Time(), record.Measurement(), record.Field(), record.Value())
-	//}
-	//client.Close()
-	//
-	//c.IndentedJSON(http.StatusOK, []model.SymbolData{})
+type DataPoint struct {
+	Time   time.Time
+	Open   float64
+	High   float64
+	Low    float64
+	Close  float64
+	Volume int
+}
+
+//=============================================================================
+
+func (dp *DataPoint) String() string {
+	var sb strings.Builder
+	sb.WriteString(dp.Time.String())
+	sb.WriteString(",")
+	sb.WriteString(fmt.Sprintf("%f", dp.Open))
+	sb.WriteString(",")
+	sb.WriteString(fmt.Sprintf("%f", dp.High))
+	sb.WriteString(",")
+	sb.WriteString(fmt.Sprintf("%f", dp.Low))
+	sb.WriteString(",")
+	sb.WriteString(fmt.Sprintf("%f", dp.Close))
+	sb.WriteString(",")
+	sb.WriteString(strconv.Itoa(dp.Volume))
+
+	return sb.String()
+}
+
+//=============================================================================
+
+type DataConfig struct {
+	UserTable bool
+	Timeframe string
+	Selector  any
+	Symbol    string
+	Timezone  string
 }
 
 //=============================================================================

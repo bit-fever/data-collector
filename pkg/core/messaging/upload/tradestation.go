@@ -28,7 +28,6 @@ import (
 	"bufio"
 	"errors"
 	"github.com/bit-fever/data-collector/pkg/ds"
-	"io"
 	"strings"
 	"time"
 )
@@ -36,6 +35,7 @@ import (
 //=============================================================================
 
 type TradestationParser struct {
+	context       *ParserContext
 	headerReady   bool
 	mapFields     map[string]int
 	indexDate     int
@@ -46,40 +46,33 @@ type TradestationParser struct {
 	indexClose    int
 	indexUp       int
 	indexDown     int
-	config        *ds.DataConfig
-	writtenPoints uint
 }
 
 //=============================================================================
 
-func (p *TradestationParser) Parse(r io.Reader, config *ds.DataConfig, loc *time.Location) (*ParserStats, error) {
-	p.config = config
-	scanner := bufio.NewScanner(r)
+func (p *TradestationParser) Parse(ctx *ParserContext) error {
+	p.context = ctx
+	scanner := bufio.NewScanner(ctx.Reader)
 
 	for scanner.Scan() {
 		line := scanner.Text()
-
 		if ! p.headerReady {
 			p.headerReady = true
 			if err := p.parseHeader(line); err != nil {
-				return nil, err
+				return err
 			}
 		} else {
-			if err := p.parseLine(line, loc); err != nil {
-				return nil, err
+			if err := p.parseLine(line, ctx.Location); err != nil {
+				return err
 			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return err
 	}
 
-	ds.Flush()
-
-	//--- Return stats
-
-	return nil, nil
+	return ctx.Flush()
 }
 
 //=============================================================================
@@ -154,13 +147,7 @@ func (p *TradestationParser) parseLine(line string, loc *time.Location) error {
 	values := strings.Split(line, ",")
 	dp,err := p.createDataPoint(values, loc)
 	if err == nil {
-		err = ds.WriteData(dp, p.config)
-		if err == nil {
-			p.writtenPoints++
-			if p.writtenPoints % 8192 == 0 {
-				ds.Flush()
-			}
-		}
+		err = p.context.SaveDataPoint(dp, len(line)+1)
 	}
 
 	return err
@@ -174,7 +161,7 @@ func (p *TradestationParser) createDataPoint(values []string, loc *time.Location
 
 	dp := &ds.DataPoint{}
 
-	dp.Timestamp,err = parseTimestamp(values[p.indexDate], values[p.indexTime], loc)
+	dp.Time,err = parseTimestamp(values[p.indexDate], values[p.indexTime], loc)
 	if err == nil {
 		dp.Open,err = parseFloat(values[p.indexOpen], Open)
 		if err == nil {
@@ -189,7 +176,7 @@ func (p *TradestationParser) createDataPoint(values []string, loc *time.Location
 							down,err = parseInt(values[p.indexDown], Down)
 							if err == nil {
 								dp.Volume = up + down
-								dp.Timestamp = dp.Timestamp.In(time.UTC)
+								dp.Time = dp.Time.In(time.UTC)
 							}
 						}
 					}
@@ -198,7 +185,7 @@ func (p *TradestationParser) createDataPoint(values []string, loc *time.Location
 		}
 	}
 
-	return dp, nil
+	return dp, err
 }
 
 //=============================================================================

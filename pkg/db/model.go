@@ -40,7 +40,7 @@ type Common struct {
 
 //=============================================================================
 
-type ProductData struct {
+type Product struct {
 	Id                   uint    `json:"id" gorm:"primaryKey"`
 	SourceId             uint    `json:"sourceId"`
 	Symbol               string  `json:"symbol"`
@@ -53,25 +53,50 @@ type ProductData struct {
 
 //=============================================================================
 
-type InstrumentData struct {
+const InstrumentStatusReady      =  0
+const InstrumentStatusProcessing =  1
+const InstrumentStatusError      = -1
+
+type Instrument struct {
 	Id               uint    `json:"id" gorm:"primaryKey"`
-	ProductDataId    uint    `json:"productDataId"`
+	ProductId        uint    `json:"productId"`
 	Symbol           string  `json:"symbol"`
 	Name             string  `json:"name"`
 	ExpirationDate   int     `json:"expirationDate,omitempty"`
 	IsContinuous     bool    `json:"isContinuous"`
-	Status           int     `json:"status"`
+	Status           int8    `json:"status"`
 	DataFrom         int     `json:"dataFrom"`
 	DataTo           int     `json:"dataTo"`
 }
 
 //=============================================================================
 
+const UploadJobStatusWaiting     = 0
+const UploadJobStatusAdding      = 1
+const UploadJobStatusAggregating = 2
+const UploadJobStatusReady       = 3
+const UploadJobStatusError       = -1
+
+type UploadJob struct {
+	Id               uint    `json:"id" gorm:"primaryKey"`
+	InstrumentId     uint    `json:"instrumentId"`
+	Status           int8    `json:"status"`
+	Filename         string  `json:"filename"`
+	Error            string  `json:"error"`
+	Progress         int8    `json:"progress"`
+	Records          int     `json:"records"`
+	Bytes            int64   `json:"bytes"`
+	Timezone         string  `json:"timezone"`
+	Parser           string  `json:"parser"`
+}
+
+//=============================================================================
+
 type LoadedPeriod struct {
-	Id               uint   `json:"id" gorm:"primaryKey"`
-	InstrumentDataId uint   `json:"instrumentDataId"`
-	Day              int    `json:"day"`
-	Status           int    `json:"status"`
+	Id           uint   `json:"id" gorm:"primaryKey"`
+	InstrumentId uint   `json:"instrumentId"`
+	Day          int    `json:"day"`
+	Status       int    `json:"status"`
 }
 
 //=============================================================================
@@ -80,8 +105,9 @@ type LoadedPeriod struct {
 //===
 //=============================================================================
 
-func (ProductData)    TableName() string { return "product_data"    }
-func (InstrumentData) TableName() string { return "instrument_data" }
-func (LoadedPeriod)   TableName() string { return "loaded_period"   }
+func (Product)      TableName() string { return "product"       }
+func (Instrument)   TableName() string { return "instrument"    }
+func (LoadedPeriod) TableName() string { return "loaded_period" }
+func (UploadJob)    TableName() string { return "upload_job"    }
 
 //=============================================================================

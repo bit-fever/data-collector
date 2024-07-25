@@ -31,15 +31,32 @@ import (
 
 //=============================================================================
 
-func GetInstrumentsBySourceId(tx *gorm.DB, sourceId uint) (*[]InstrumentData, error) {
-	var list []InstrumentData
+func GetInstrumentById(tx *gorm.DB, id uint) (*Instrument, error) {
+	var list []Instrument
+	res := tx.Find(&list, id)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	if len(list) == 1 {
+		return &list[0], nil
+	}
+
+	return nil, nil
+}
+
+//=============================================================================
+
+func GetInstrumentsBySourceId(tx *gorm.DB, sourceId uint) (*[]Instrument, error) {
+	var list []Instrument
 
 	filter := map[string]any{}
 	filter["source_id"] = sourceId
 
 	res := tx.
 			Where(filter).
-			Joins("JOIN product_data pd ON pd.id = product_data_id").
+			Joins("JOIN product pd ON pd.id = product_id").
 			Order("expiration_date").
 			Find(&list)
 
@@ -52,12 +69,12 @@ func GetInstrumentsBySourceId(tx *gorm.DB, sourceId uint) (*[]InstrumentData, er
 
 //=============================================================================
 
-func GetInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*InstrumentData, error) {
+func GetInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*Instrument, error) {
 	filter := map[string]any{}
-	filter["product_data_id"] = productId
-	filter["symbol"]          = symbol
+	filter["product_id"] = productId
+	filter["symbol"]     = symbol
 
-	var list []InstrumentData
+	var list []Instrument
 	res := tx.Where(filter).Find(&list)
 
 	if res.Error != nil {
@@ -73,14 +90,26 @@ func GetInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*Instrum
 
 //=============================================================================
 
-func AddInstrumentData(tx *gorm.DB, data *InstrumentData) error {
-	return tx.Create(data).Error
+func AddInstrument(tx *gorm.DB, i *Instrument) error {
+	return tx.Create(i).Error
 }
 
 //=============================================================================
 
-func UpdateInstrumentData(tx *gorm.DB, data *InstrumentData) error {
-	return tx.Updates(data).Error
+func UpdateInstrument(tx *gorm.DB, i *Instrument) error {
+	return tx.Save(i).Error
+}
+
+//=============================================================================
+
+func AddUploadJob(tx *gorm.DB, job *UploadJob) error {
+	return tx.Create(job).Error
+}
+
+//=============================================================================
+
+func UpdateUploadJob(tx *gorm.DB, job *UploadJob) error {
+	return tx.Save(job).Error
 }
 
 //=============================================================================

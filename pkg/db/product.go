@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2023 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +31,8 @@ import (
 
 //=============================================================================
 
-func GetProductDataById(tx *gorm.DB, id uint) (*ProductData, error) {
-	var list []ProductData
+func GetProductById(tx *gorm.DB, id uint) (*Product, error) {
+	var list []Product
 	res := tx.Find(&list, id)
 
 	if res.Error != nil {
@@ -48,11 +48,11 @@ func GetProductDataById(tx *gorm.DB, id uint) (*ProductData, error) {
 
 //=============================================================================
 
-func GetProductDataBySourceId(tx *gorm.DB, sourceId uint) (*ProductData, error) {
+func GetProductBySourceId(tx *gorm.DB, sourceId uint) (*Product, error) {
 	filter := map[string]any{}
 	filter["source_id"] = sourceId
 
-	var list []ProductData
+	var list []Product
 	res := tx.Where(filter).Find(&list)
 
 	if res.Error != nil {
@@ -68,14 +68,14 @@ func GetProductDataBySourceId(tx *gorm.DB, sourceId uint) (*ProductData, error) 
 
 //=============================================================================
 
-func AddProductData(tx *gorm.DB, ts *ProductData) error {
-	return tx.Create(ts).Error
+func AddProduct(tx *gorm.DB, p *Product) error {
+	return tx.Create(p).Error
 }
 
 //=============================================================================
 
-func UpdateProductData(tx *gorm.DB, ts *ProductData) {
-	tx.Updates(ts)
+func UpdateProduct(tx *gorm.DB, p *Product) error {
+	return tx.Save(p).Error
 }
 
 //=============================================================================

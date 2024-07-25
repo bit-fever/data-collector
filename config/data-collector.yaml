@@ -17,8 +17,9 @@ messaging:
   address: localhost:8450
   username: rabbit-admin
   password: rabbit.admin
-data:
-  org: BitFever
-  url: http://localhost:3410
-  bucket: symbol-data
-  token: xdtSqXm2-9Sl7_dpnXx5yQqEbglhklw3KRQDd_0Zj-Vyo-x0sjxbCI4K_wbtyq_xzbn9I4xd9KzAZd7vYlORIQ==
+datastore:
+  address: localhost:3410
+  name: datastore
+  username: bitfever
+  password: bitfever
+  staging:  staging

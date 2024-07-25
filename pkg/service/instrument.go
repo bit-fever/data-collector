@@ -22,18 +22,54 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package model
+package service
+
+import (
+	//"context"
+	//"fmt"
+	//"github.com/bit-fever/data-collector/pkg/model"
+	//"github.com/bit-fever/data-collector/pkg/model/config"
+	//"github.com/bit-fever/data-collector/pkg/model/config/data"
+	//influx "github.com/influxdata/influxdb-client-go/v2"
+	//"github.com/spf13/viper"
+	//"net/http"
+	"github.com/bit-fever/core/auth"
+	"github.com/bit-fever/data-collector/pkg/business"
+	"github.com/bit-fever/data-collector/pkg/db"
+	"github.com/bit-fever/data-collector/pkg/ds"
+	"gorm.io/gorm"
+)
 
 //=============================================================================
 
-type SymbolData struct {
-	Code     string  `json:"code,omitempty"`
-	Name     string  `json:"name"`
-	MakerFee float64 `json:"maker_fee"`
-	TakerFee float64 `json:"taker_fee"`
-	ApiKey   string  `json:"api_key"`
-	Secret   string  `json:"secret"`
-	Test     bool    `json:"test"`
+func getInstrumentData(c *auth.Context) {
+	id, err   := c.GetIdFromUrl()
+	from      := c.GetParamAsString("from",      "")
+	to        := c.GetParamAsString("to",        "")
+	timeframe := c.GetParamAsString("timeframe", "5m")
+	timezone  := c.GetParamAsString("timezone",  "UTC")
+
+	var result []*ds.DataPoint
+	var config *ds.DataConfig
+
+	if err == nil {
+		err = db.RunInTransaction(func(tx *gorm.DB) error {
+			cfg, err := business.CreateDataConfig(tx, id)
+			config = cfg
+			return err
+		})
+
+		if err == nil {
+			config.Timeframe = timeframe
+			result, err = business.GetInstrumentDataById(c, from, to, timezone, config)
+			if err == nil {
+				_=c.ReturnObject(result)
+				return
+			}
+		}
+	}
+
+	c.ReturnError(err)
 }
 
 //=============================================================================

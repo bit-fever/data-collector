@@ -29,19 +29,21 @@ import (
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
+	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 	"io"
 	"mime/multipart"
+	"time"
 )
 
 //=============================================================================
 
-func getInstrumentDataBySourceId(c *auth.Context) {
-	pdId, err := c.GetIdFromUrl()
+func getInstrumentsBySourceId(c *auth.Context) {
+	pId, err := c.GetIdFromUrl()
 
 	if err == nil {
 		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			list, err := business.GetInstrumentDataBySourceId(tx, c, pdId)
+			list, err := business.GetInstrumentsBySourceId(tx, c, pId)
 
 			if err != nil {
 				return err
@@ -59,6 +61,8 @@ func getInstrumentDataBySourceId(c *auth.Context) {
 func uploadInstrumentData(c *auth.Context) {
 	sourceId, err := c.GetIdFromUrl()
 
+	start := time.Now()
+
 	if err == nil {
 		var reader *multipart.Reader
 		reader, err = c.Gin.Request.MultipartReader()
@@ -72,21 +76,23 @@ func uploadInstrumentData(c *auth.Context) {
 
 				if err == nil {
 					if part, err = reader.NextPart(); err != io.EOF {
-						var instrData *db.InstrumentData
-						var prodData  *db.ProductData
-
-						err = db.RunInTransaction(func(tx *gorm.DB) error {
-							instrData, prodData, err = business.PrepareForUpload(tx, c, sourceId, spec)
-							return err
-						})
+						filename := ""
+						var bytes int64
+						filename, bytes, err = ds.SaveDatafile(part)
+						_ = part.Close()
 
 						if err == nil {
-							var response *business.DatafileUploadResponse
-							response, err = business.UploadInstrumentData(c, spec, instrData, prodData, part)
+							err = db.RunInTransaction(func(tx *gorm.DB) error {
+								return business.AddInstrumentAndJob(tx, c, sourceId, spec, filename, bytes)
+							})
 
 							if err == nil {
-								_ = part.Close()
-								_ = c.ReturnObject(response)
+								dur := int(time.Now().Sub(start).Seconds())
+								_ = c.ReturnObject(&business.DatafileUploadResponse{
+									Duration: dur,
+									Bytes   : bytes,
+								})
+								return
 							}
 						}
 					}

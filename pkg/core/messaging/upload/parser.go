@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2023 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,51 +22,48 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package messaging
+package upload
+
+import (
+	"errors"
+)
 
 //=============================================================================
 
-type ProductData struct {
-	Id            uint    `json:"id"`
-	ConnectionId  uint    `json:"connectionId"`
-	ExchangeId    uint    `json:"exchangeId"`
-	Username      string  `json:"username"`
-	Symbol        string  `json:"symbol"`
-	Name          string  `json:"name"`
-	Increment     float64 `json:"increment"`
+const TradestationCode = "tsa"
+const TradestationName = "Tradestation (ASCII)"
+
+//=============================================================================
+
+type DataRange struct {
+	FromDay int
+	ToDay   int
 }
 
 //=============================================================================
 
-type Connection struct {
-	Id                   uint    `json:"id"`
-	Username             string  `json:"username"`
-	Code                 string  `json:"code"`
-	Name                 string  `json:"name"`
-	SystemCode           string  `json:"systemCode"`
-	SystemName           string  `json:"systemName"`
-	InstanceCode         string  `json:"instanceCode"`
-	SupportsData         bool    `json:"supportsData"`
-	SupportsMultipleData bool    `json:"supportsMultipleData"`
-	SupportsInventory    bool    `json:"supportsInventory"`
+type Parser interface {
+	Parse(config *ParserContext) error
 }
 
 //=============================================================================
 
-type Exchange struct {
-	Id         uint   `json:"id"`
-	CurrencyId uint   `json:"currencyId"`
-	Code       string `json:"code"`
-	Name       string `json:"name"`
-	Timezone   string `json:"timezone"`
+func GetParsers() map[string]string {
+	var res = map[string]string{}
+
+	res[TradestationCode] = TradestationName
+
+	return res
 }
 
 //=============================================================================
 
-type ProductDataMessage struct {
-	ProductData ProductData `json:"productData"`
-	Connection  Connection  `json:"connection"`
-	Exchange    Exchange    `json:"exchange"`
+func NewParser(code string) (Parser, error) {
+	switch code {
+		case TradestationCode: return &TradestationParser{}, nil
+	}
+
+	return nil, errors.New("Unknown parser type : "+ code)
 }
 
 //=============================================================================

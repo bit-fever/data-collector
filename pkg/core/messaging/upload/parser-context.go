@@ -25,107 +25,99 @@ THE SOFTWARE.
 package upload
 
 import (
-	"errors"
-	"strconv"
+	"github.com/bit-fever/data-collector/pkg/db"
+	"github.com/bit-fever/data-collector/pkg/ds"
+	"gorm.io/gorm"
+	"io"
 	"time"
 )
 
 //=============================================================================
 
-const Date  = "Date"
-const Time  = "Time"
-const Open  = "Open"
-const High  = "High"
-const Low   = "Low"
-const Close = "Close"
-const Up    = "Up"
-const Down  = "Down"
+type ParserContext struct {
+	Reader     io.Reader
+	Config     *ds.DataConfig
+	Location   *time.Location
+	Job        *db.UploadJob
+	DataRange  *DataRange
+	DataAggreg *DataAggregator
+
+	//--- Private stuff
+
+	dataPoints []*ds.DataPoint
+	currBytes  int64
+}
 
 //=============================================================================
 //===
-//=== Common functions
+//=== Constructor
 //===
 //=============================================================================
 
-func parseInt(value string, name string) (int, error) {
-	res,err := strconv.Atoi(value)
-
-	if err != nil {
-		return 0, errors.New("Field '"+name+"' is not a valid integer")
+func NewParserContext(file io.Reader, config *ds.DataConfig, loc *time.Location, job *db.UploadJob) *ParserContext {
+	c := &ParserContext{
+		Reader  : file,
+		Config  : config,
+		Location: loc,
+		Job     : job,
 	}
 
-	return res, nil
+	c.dataPoints = []*ds.DataPoint{}
+	c.DataRange  = &DataRange{}
+	c.DataAggreg = NewDataAggregator(TimeSlotFunction5m)
+
+	return c
 }
 
 //=============================================================================
-
-func parseFloat(value string, name string) (float64, error) {
-	res,err := strconv.ParseFloat(value, 64)
-
-	if err != nil {
-		return 0, errors.New("Field '"+name+"' is not a valid float")
-	}
-
-	return res, nil
-}
-
+//===
+//=== Public methods
+//===
 //=============================================================================
 
-func parseTimestamp(date string, hhmm string, loc *time.Location) (time.Time, error) {
-	year, mon, day, err := parseDate(date)
+func (c *ParserContext) SaveDataPoint(dp *ds.DataPoint, bytes int) error {
+	c.dataPoints = append(c.dataPoints, dp)
+	c.Job.Records++
+	c.currBytes += int64(bytes)
 
-	if err == nil {
-		hh, mm, err := parseTime(hhmm)
-
-		if err == nil {
-			return time.Date(year, time.Month(mon), day, hh, mm, 0, 0, loc), nil
+	if c.Job.Records % 8192 == 0 {
+		if err := ds.SetDataPoints(c.dataPoints, c.Config); err != nil {
+			return err
 		}
-
-		return time.Now(), err
+		c.dataPoints = []*ds.DataPoint{}
 	}
 
-	return time.Now(), err
+	updateDataRange(dp.Time, c.DataRange)
+	c.DataAggreg.Add(dp)
+
+	return c.updateProgress()
 }
 
 //=============================================================================
 
-func parseDate(date string) (int, int, int, error) {
-	if len(date) != 10 || date[2] != '/' || date[5] != '/' {
-		return 0,0,0, errors.New("Field '"+ Date +"' has an invalid format")
-	}
-
-	sMon := date[0:2]
-	sDay := date[3:5]
-	sYear:= date[6:]
-
-	if mon,err := strconv.Atoi(sMon); err == nil {
-		if day,err := strconv.Atoi(sDay); err == nil {
-			if year,err := strconv.Atoi(sYear); err == nil {
-				return year, mon, day, nil
-			}
-		}
-	}
-
-	return 0,0,0, errors.New("Field '"+ Date +"' has an invalid format")
+func (c *ParserContext) Flush() error {
+	c.DataAggreg.Flush()
+	return ds.SetDataPoints(c.dataPoints, c.Config)
 }
 
 //=============================================================================
+//===
+//=== Private methods
+//===
+//=============================================================================
 
-func parseTime(hhmm string) (int, int, error) {
-	if len(hhmm) != 5 || hhmm[2] != ':' {
-		return 0, 0, errors.New("Field '"+ Time +"' has an invalid format")
+func (c *ParserContext) updateProgress() error {
+	curProgress := int8(c.currBytes * 100 / c.Job.Bytes)
+
+	if c.Job.Progress != curProgress {
+		c.Job.Progress = curProgress
+
+		return db.RunInTransaction(func(tx *gorm.DB) error {
+			return db.UpdateUploadJob(tx, c.Job)
+		})
 	}
 
-	sHH := hhmm[0:2]
-	sMM := hhmm[3:]
-
-	if hh,err := strconv.Atoi(sHH); err == nil {
-		if mm,err := strconv.Atoi(sMM); err == nil {
-			return hh, mm, nil
-		}
-	}
-
-	return 0,0, errors.New("Field '"+ Time +"' has an invalid format")
+	return nil
 }
 
 //=============================================================================

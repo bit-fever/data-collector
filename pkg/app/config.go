@@ -30,22 +30,23 @@ import (
 
 //=============================================================================
 
+type Datastore struct {
+	Address  string
+	Name     string
+	Username string
+	Password string
+	Staging  string
+}
+
+//=============================================================================
+
 type Config struct {
 	core.Application
 	core.Database
 	core.Authentication
 	core.Platform
 	core.Messaging
-	Data
-}
-
-//=============================================================================
-
-type Data struct {
-	Org    string
-	Url    string
-	Bucket string
-	Token  string
+	Datastore
 }
 
 //=============================================================================

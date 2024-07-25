@@ -25,10 +25,9 @@ THE SOFTWARE.
 package messaging
 
 import (
-	"encoding/json"
 	"github.com/bit-fever/core/msg"
-	"github.com/bit-fever/data-collector/pkg/db"
-	"gorm.io/gorm"
+	"github.com/bit-fever/data-collector/pkg/core/messaging/update"
+	"github.com/bit-fever/data-collector/pkg/core/messaging/upload"
 	"log/slog"
 )
 
@@ -37,60 +36,8 @@ import (
 func InitMessageListener() {
 	slog.Info("Starting message listeners...")
 
-	go msg.ReceiveMessages(msg.QuInventoryUpdatesToCollector, handleMessage)
-}
-
-//=============================================================================
-
-func handleMessage(m *msg.Message) bool {
-
-	slog.Info("New message received", "origin", m.Origin, "type", m.Type, "source", m.Source)
-
-	if m.Origin == msg.OriginDb {
-		if m.Source == msg.SourceProductData {
-			pdm := ProductDataMessage{}
-			err := json.Unmarshal(m.Entity, &pdm)
-			if err != nil {
-				slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
-				return true
-			}
-
-			if m.Type == msg.TypeCreate {
-				return addProductData(&pdm)
-			}
-		}
-	}
-
-	slog.Error("Dropping message with unknown origin/type!", "origin", m.Origin, "type", m.Type)
-	return true
-}
-
-//=============================================================================
-
-func addProductData(pdm *ProductDataMessage) bool {
-	slog.Info("addProductData: Product for data change received", "sourceId", pdm.ProductData.Id)
-
-	err := db.RunInTransaction(func(tx *gorm.DB) error {
-		pd := &db.ProductData{}
-
-		pd.SourceId             = pdm.ProductData.Id
-		pd.Symbol               = pdm.ProductData.Symbol
-		pd.Username             = pdm.ProductData.Username
-		pd.SystemCode           = pdm.Connection.SystemCode
-		pd.ConnectionCode       = pdm.Connection.Code
-		pd.SupportsMultipleData = pdm.Connection.SupportsMultipleData
-		pd.Timezone             = pdm.Exchange.Timezone
-
-		return db.AddProductData(tx, pd)
-	})
-
-	if err != nil {
-		slog.Error("Raised error while processing message")
-	} else {
-		slog.Info("addProductData: Operation complete")
-	}
-
-	return err == nil
+	go msg.ReceiveMessages(msg.QuInventoryUpdatesToCollector, update.HandleUpdateMessage)
+	go msg.ReceiveMessages(msg.QuCollectorUploadToIngester,   upload.HandleUploadMessage)
 }
 
 //=============================================================================

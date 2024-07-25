@@ -26,7 +26,7 @@ package service
 
 import (
 	"github.com/bit-fever/core/auth"
-	"github.com/bit-fever/data-collector/pkg/business/upload"
+	"github.com/bit-fever/data-collector/pkg/core/messaging/upload"
 )
 
 //=============================================================================
