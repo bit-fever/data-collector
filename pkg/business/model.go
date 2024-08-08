@@ -24,9 +24,14 @@ THE SOFTWARE.
 
 package business
 
+import (
+	"github.com/bit-fever/data-collector/pkg/ds"
+	"time"
+)
+
 //=============================================================================
 //===
-//=== ProductData composite structs
+//=== Upload spec & response
 //===
 //=============================================================================
 
@@ -43,6 +48,43 @@ type DatafileUploadSpec struct {
 type DatafileUploadResponse struct {
 	Duration int   `json:"duration"`
 	Bytes    int64 `json:"bytes"`
+}
+
+//=============================================================================
+//=== Get data response
+//=============================================================================
+
+type InstrumentDataSpec struct {
+	Id        uint
+	From      string
+	To        string
+	Timezone  string
+	Reduction string
+	Config    *ds.DataConfig
+}
+
+//=============================================================================
+
+type InstrumentDataParams struct {
+	Location  *time.Location
+	From       time.Time
+	To         time.Time
+	Reduction  int
+}
+
+//=============================================================================
+
+type InstrumentDataResponse struct {
+	Id          uint            `json:"id"`
+	Symbol      string          `json:"symbol"`
+	From        string          `json:"from"`
+	To          string          `json:"to"`
+	Timeframe   string          `json:"timeframe"`
+	Timezone    string          `json:"timezone"`
+	Reduction   int             `json:"reduction,omitempty"`
+	Reduced     bool            `json:"reduced"`
+	Records     int             `json:"records"`
+	DataPoints  []*ds.DataPoint `json:"dataPoints"`
 }
 
 //=============================================================================

@@ -43,14 +43,11 @@ import (
 //=============================================================================
 
 func getInstrumentData(c *auth.Context) {
-	id, err   := c.GetIdFromUrl()
-	from      := c.GetParamAsString("from",      "")
-	to        := c.GetParamAsString("to",        "")
-	timeframe := c.GetParamAsString("timeframe", "5m")
-	timezone  := c.GetParamAsString("timezone",  "UTC")
-
-	var result []*ds.DataPoint
+	var result *business.InstrumentDataResponse
 	var config *ds.DataConfig
+
+	id, err   := c.GetIdFromUrl()
+	timeframe := c.GetParamAsString("timeframe",  "5m")
 
 	if err == nil {
 		err = db.RunInTransaction(func(tx *gorm.DB) error {
@@ -61,7 +58,15 @@ func getInstrumentData(c *auth.Context) {
 
 		if err == nil {
 			config.Timeframe = timeframe
-			result, err = business.GetInstrumentDataById(c, from, to, timezone, config)
+			spec := &business.InstrumentDataSpec{
+				Id       : id,
+				From     : c.GetParamAsString("from",     ""),
+				To       : c.GetParamAsString("to",       ""),
+				Timezone : c.GetParamAsString("timezone", "UTC"),
+				Reduction: c.GetParamAsString("reduction",""),
+				Config   : config,
+			}
+			result, err = business.GetInstrumentDataById(c, spec)
 			if err == nil {
 				_=c.ReturnObject(result)
 				return

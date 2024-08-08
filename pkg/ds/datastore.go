@@ -43,6 +43,8 @@ import (
 var pool *pgxpool.Pool
 var staging string
 
+type Formatter func(dp *DataPoint) any
+
 //=============================================================================
 
 func InitDatastore(cfg *app.Datastore) {
