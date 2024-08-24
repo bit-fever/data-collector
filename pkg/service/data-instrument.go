@@ -22,60 +22,67 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
+package service
 
 import (
-	"github.com/bit-fever/core/req"
+	"github.com/bit-fever/core/auth"
+	"github.com/bit-fever/data-collector/pkg/business"
+	"github.com/bit-fever/data-collector/pkg/db"
+	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-func GetProductById(tx *gorm.DB, id uint) (*Product, error) {
-	var list []Product
-	res := tx.Find(&list, id)
+func getDataInstruments(c *auth.Context) {
+	err:= db.RunInTransaction(func(tx *gorm.DB) error {
+		list, err := business.GetDataInstruments(tx, c)
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
-	}
+		if err != nil {
+				return err
+			}
 
-	if len(list) == 1 {
-		return &list[0], nil
-	}
+		return c.ReturnList(list, 0, len(*list), len(*list))
+	})
 
-	return nil, nil
+	c.ReturnError(err)
 }
 
 //=============================================================================
 
-func GetProductBySourceId(tx *gorm.DB, sourceId uint) (*Product, error) {
-	filter := map[string]any{}
-	filter["source_id"] = sourceId
+func getDataInstrumentData(c *auth.Context) {
+	var result *business.DataInstrumentDataResponse
+	var config *ds.DataConfig
 
-	var list []Product
-	res := tx.Where(filter).Find(&list)
+	id, err   := c.GetIdFromUrl()
+	timeframe := c.GetParamAsString("timeframe",  "5m")
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+	if err == nil {
+		err = db.RunInTransaction(func(tx *gorm.DB) error {
+			cfg, err := business.CreateDataConfig(tx, id)
+			config = cfg
+			return err
+		})
+
+		if err == nil {
+			config.Timeframe = timeframe
+			spec := &business.DataInstrumentDataSpec{
+				Id       : id,
+				From     : c.GetParamAsString("from",     ""),
+				To       : c.GetParamAsString("to",       ""),
+				Timezone : c.GetParamAsString("timezone", "UTC"),
+				Reduction: c.GetParamAsString("reduction",""),
+				Config   : config,
+			}
+			result, err = business.GetDataInstrumentDataById(c, spec)
+			if err == nil {
+				_=c.ReturnObject(result)
+				return
+			}
+		}
 	}
 
-	if len(list) == 1 {
-		return &list[0], nil
-	}
-
-	return nil, nil
-}
-
-//=============================================================================
-
-func AddProduct(tx *gorm.DB, p *Product) error {
-	return tx.Create(p).Error
-}
-
-//=============================================================================
-
-func UpdateProduct(tx *gorm.DB, p *Product) error {
-	return tx.Save(p).Error
+	c.ReturnError(err)
 }
 
 //=============================================================================

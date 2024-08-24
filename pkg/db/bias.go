@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2023 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +31,39 @@ import (
 
 //=============================================================================
 
-func GetInstrumentById(tx *gorm.DB, id uint) (*Instrument, error) {
-	var list []Instrument
+func GetBiasAnalyses(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
+	var list []BiasAnalysisFull
+	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	return &list, nil
+}
+
+//=============================================================================
+
+func GetBiasAnalysesFull(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
+	var list []BiasAnalysisFull
+	query :=
+		"SELECT ba.*, bp.symbol as brokerSymbol, bp.name as brokerName " +
+		"FROM bias_analysis ba " +
+		"LEFT JOIN broker_product bp on ba.broker_product_id = bp.id"
+
+	res := tx.Raw(query).Where(filter).Offset(offset).Limit(limit).Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	return &list, nil
+}
+
+//=============================================================================
+
+func GetBiasAnalysisById(tx *gorm.DB, id uint) (*BiasAnalysis, error) {
+	var list []BiasAnalysis
 	res := tx.Find(&list, id)
 
 	if res.Error != nil {
@@ -48,68 +79,31 @@ func GetInstrumentById(tx *gorm.DB, id uint) (*Instrument, error) {
 
 //=============================================================================
 
-func GetInstrumentsBySourceId(tx *gorm.DB, sourceId uint) (*[]Instrument, error) {
-	var list []Instrument
+func AddBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
+	return tx.Create(ba).Error
+}
+
+//=============================================================================
+
+func UpdateBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
+	return tx.Save(ba).Error
+}
+
+//=============================================================================
+
+func GetBiasConfigsByAnalysisId(tx *gorm.DB, id uint) (*[]BiasConfig, error) {
+	var list []BiasConfig
 
 	filter := map[string]any{}
-	filter["source_id"] = sourceId
+	filter["bias_analysis_id"] = id
 
-	res := tx.
-			Where(filter).
-			Joins("JOIN product pd ON pd.id = product_id").
-			Order("expiration_date").
-			Find(&list)
+	res := tx.Where(filter).Order("start_slot").Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
 	}
 
 	return &list, nil
-}
-
-//=============================================================================
-
-func GetInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*Instrument, error) {
-	filter := map[string]any{}
-	filter["product_id"] = productId
-	filter["symbol"]     = symbol
-
-	var list []Instrument
-	res := tx.Where(filter).Find(&list)
-
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
-	}
-
-	if len(list) == 1 {
-		return &list[0], nil
-	}
-
-	return nil, nil
-}
-
-//=============================================================================
-
-func AddInstrument(tx *gorm.DB, i *Instrument) error {
-	return tx.Create(i).Error
-}
-
-//=============================================================================
-
-func UpdateInstrument(tx *gorm.DB, i *Instrument) error {
-	return tx.Save(i).Error
-}
-
-//=============================================================================
-
-func AddUploadJob(tx *gorm.DB, job *UploadJob) error {
-	return tx.Create(job).Error
-}
-
-//=============================================================================
-
-func UpdateUploadJob(tx *gorm.DB, job *UploadJob) error {
-	return tx.Save(job).Error
 }
 
 //=============================================================================

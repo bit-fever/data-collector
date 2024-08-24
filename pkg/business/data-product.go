@@ -35,35 +35,35 @@ import (
 
 //=============================================================================
 
-func GetInstrumentsBySourceId(tx *gorm.DB, c *auth.Context, sourceId uint)(*[]db.Instrument, error) {
-	return db.GetInstrumentsBySourceId(tx, sourceId)
+func GetDataInstrumentsByProductId(tx *gorm.DB, c *auth.Context, productId uint)(*[]db.DataInstrument, error) {
+	return db.GetDataInstrumentsByProductId(tx, productId)
 }
 
 //=============================================================================
 
-func AddInstrumentAndJob(tx *gorm.DB, c *auth.Context, sourceId uint, spec *DatafileUploadSpec, filename string, bytes int64) error {
-	c.Log.Info("PrepareUploadTask: Creating instrument for a product", "sourceId", sourceId, "symbol", spec.Symbol)
+func AddDataInstrumentAndJob(tx *gorm.DB, c *auth.Context, productId uint, spec *DatafileUploadSpec, filename string, bytes int64) error {
+	c.Log.Info("AddDataInstrumentAndJob: Creating instrument for a data product", "dataProductId", productId, "symbol", spec.Symbol)
 
-	p, err := getProductAndCheckAccess(tx, c, sourceId, "AddInstrumentAndJob")
+	p, err := getDataProductAndCheckAccess(tx, c, productId, "AddDataInstrumentAndJob")
 	if err != nil {
 		return err
 	}
 
-	i, err := db.GetInstrumentBySymbol(tx, p.Id, spec.Symbol)
+	i, err := db.GetDataInstrumentBySymbol(tx, p.Id, spec.Symbol)
 	if err != nil {
 		return err
 	}
 
 	if i == nil {
-		i = &db.Instrument{
-			ProductId   : p.Id,
-			Symbol      : spec.Symbol,
-			Name        : spec.Name,
-			IsContinuous: spec.Continuous,
-			Status      : db.InstrumentStatusProcessing,
+		i = &db.DataInstrument{
+			DataProductId: p.Id,
+			Symbol       : spec.Symbol,
+			Name         : spec.Name,
+			IsContinuous : spec.Continuous,
+			Status       : db.InstrumentStatusProcessing,
 		}
 
-		err = db.AddInstrument(tx, i)
+		err = db.AddDataInstrument(tx, i)
 		if err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ func AddInstrumentAndJob(tx *gorm.DB, c *auth.Context, sourceId uint, spec *Data
 		i.IsContinuous = spec.Continuous
 		i.Status       = db.InstrumentStatusProcessing
 
-		err = db.UpdateInstrument(tx, i)
+		err = db.UpdateDataInstrument(tx, i)
 		if err != nil {
 			return err
 		}
@@ -86,12 +86,12 @@ func AddInstrumentAndJob(tx *gorm.DB, c *auth.Context, sourceId uint, spec *Data
 	//--- Add upload job
 
 	job := &db.UploadJob{
-		InstrumentId: i.Id,
-		Status      : db.UploadJobStatusWaiting,
-		Filename    : filename,
-		Bytes       : bytes,
-		Timezone    : timezone,
-		Parser      : spec.Parser,
+		DataInstrumentId: i.Id,
+		Status          : db.UploadJobStatusWaiting,
+		Filename        : filename,
+		Bytes           : bytes,
+		Timezone        : timezone,
+		Parser          : spec.Parser,
 	}
 
 	err = db.AddUploadJob(tx, job)
@@ -108,23 +108,23 @@ func AddInstrumentAndJob(tx *gorm.DB, c *auth.Context, sourceId uint, spec *Data
 //===
 //=============================================================================
 
-func getProductAndCheckAccess(tx *gorm.DB, c *auth.Context, sourceId uint, function string) (*db.Product, error) {
-	p, err := db.GetProductBySourceId(tx, sourceId)
+func getDataProductAndCheckAccess(tx *gorm.DB, c *auth.Context, id uint, function string) (*db.DataProduct, error) {
+	p, err := db.GetDataProductById(tx, id)
 
 	if err != nil {
-		c.Log.Error(function +": Could not retrieve product", "error", err.Error())
+		c.Log.Error(function +": Could not retrieve data product", "error", err.Error())
 		return nil, err
 	}
 
 	if p == nil {
-		c.Log.Error(function +": Product was not found", "sourceId", sourceId)
-		return nil, req.NewNotFoundError("Product was not found: %v", sourceId)
+		c.Log.Error(function +": Data product was not found", "id", id)
+		return nil, req.NewNotFoundError("Data product was not found: %v", id)
 	}
 
 	if ! c.Session.IsAdmin() {
 		if p.Username != c.Session.Username {
-			c.Log.Error(function +": Product not owned by user", "sourceId", sourceId)
-			return nil, req.NewForbiddenError("Product is not owned by user: %v", sourceId)
+			c.Log.Error(function +": Data product not owned by user", "id", id)
+			return nil, req.NewForbiddenError("Data product is not owned by user: %v", id)
 		}
 	}
 
@@ -146,7 +146,7 @@ func sendIngestJobMessage(c *auth.Context, job *db.UploadJob) error {
 
 //=============================================================================
 
-func calcTimezone(fileTimezone string, p *db.Product) (string, error){
+func calcTimezone(fileTimezone string, p *db.DataProduct) (string, error){
 	if fileTimezone == "utc" {
 		return "utc",      nil
 	}

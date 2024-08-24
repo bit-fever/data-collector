@@ -39,16 +39,28 @@ func HandleUpdateMessage(m *msg.Message) bool {
 	slog.Info("New message received", "origin", m.Origin, "type", m.Type, "source", m.Source)
 
 	if m.Origin == msg.OriginDb {
-		if m.Source == msg.SourceProductData {
-			pdm := ProductDataMessage{}
-			err := json.Unmarshal(m.Entity, &pdm)
+		if m.Source == msg.SourceDataProduct {
+			dpm := DataProductMessage{}
+			err := json.Unmarshal(m.Entity, &dpm)
 			if err != nil {
-				slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
+				slog.Error("Dropping badly data formatted message (DataProduct)!", "entity", string(m.Entity))
 				return true
 			}
 
 			if m.Type == msg.TypeCreate {
-				return addProduct(&pdm)
+				return addDataProduct(&dpm)
+			}
+
+		} else if m.Source == msg.SourceBrokerProduct {
+			bpm := BrokerProductMessage{}
+			err := json.Unmarshal(m.Entity, &bpm)
+			if err != nil {
+				slog.Error("Dropping badly formatted message (BrokerProduct)!", "entity", string(m.Entity))
+				return true
+			}
+
+			if m.Type == msg.TypeCreate || m.Type == msg.TypeUpdate {
+				return setBrokerProduct(&bpm)
 			}
 		}
 	}
@@ -59,27 +71,55 @@ func HandleUpdateMessage(m *msg.Message) bool {
 
 //=============================================================================
 
-func addProduct(pdm *ProductDataMessage) bool {
-	slog.Info("addProduct: Product for data change received", "sourceId", pdm.ProductData.Id)
+func addDataProduct(dpm *DataProductMessage) bool {
+	slog.Info("addDataProduct: Data product change received", "id", dpm.DataProduct.Id)
 
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
-		pd := &db.Product{}
+		pd := &db.DataProduct{}
 
-		pd.SourceId             = pdm.ProductData.Id
-		pd.Symbol               = pdm.ProductData.Symbol
-		pd.Username             = pdm.ProductData.Username
-		pd.SystemCode           = pdm.Connection.SystemCode
-		pd.ConnectionCode       = pdm.Connection.Code
-		pd.SupportsMultipleData = pdm.Connection.SupportsMultipleData
-		pd.Timezone             = pdm.Exchange.Timezone
+		pd.Id                   = dpm.DataProduct.Id
+		pd.Symbol               = dpm.DataProduct.Symbol
+		pd.Username             = dpm.DataProduct.Username
+		pd.SystemCode           = dpm.Connection.SystemCode
+		pd.ConnectionCode       = dpm.Connection.Code
+		pd.SupportsMultipleData = dpm.Connection.SupportsMultipleData
+		pd.Timezone             = dpm.Exchange.Timezone
 
-		return db.AddProduct(tx, pd)
+		return db.AddDataProduct(tx, pd)
 	})
 
 	if err != nil {
 		slog.Error("Raised error while processing message")
 	} else {
-		slog.Info("addProduct: Operation complete")
+		slog.Info("addDataProduct: Operation complete")
+	}
+
+	return err == nil
+}
+
+//=============================================================================
+
+func setBrokerProduct(bpm *BrokerProductMessage) bool {
+	slog.Info("setBrokerProduct: Broker product change received", "id", bpm.BrokerProduct.Id)
+
+	err := db.RunInTransaction(func(tx *gorm.DB) error {
+		bp := &db.BrokerProduct{}
+
+		bp.Id           = bpm.BrokerProduct.Id
+		bp.Symbol       = bpm.BrokerProduct.Symbol
+		bp.Username     = bpm.BrokerProduct.Username
+		bp.Name         = bpm.BrokerProduct.Name
+		bp.PointValue   = bpm.BrokerProduct.PointValue
+		bp.CostPerTrade = bpm.BrokerProduct.CostPerTrade
+		bp.CurrencyCode = bpm.Currency.Code
+
+		return db.UpdateBrokerProduct(tx, bp)
+	})
+
+	if err != nil {
+		slog.Error("Raised error while processing message")
+	} else {
+		slog.Info("setBrokerProduct: Operation complete")
 	}
 
 	return err == nil

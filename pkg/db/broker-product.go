@@ -22,59 +22,40 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package service
+package db
 
 import (
-	//"context"
-	//"fmt"
-	//"github.com/bit-fever/data-collector/pkg/model"
-	//"github.com/bit-fever/data-collector/pkg/model/config"
-	//"github.com/bit-fever/data-collector/pkg/model/config/data"
-	//influx "github.com/influxdata/influxdb-client-go/v2"
-	//"github.com/spf13/viper"
-	//"net/http"
-	"github.com/bit-fever/core/auth"
-	"github.com/bit-fever/data-collector/pkg/business"
-	"github.com/bit-fever/data-collector/pkg/db"
-	"github.com/bit-fever/data-collector/pkg/ds"
+	"github.com/bit-fever/core/req"
 	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-func getInstrumentData(c *auth.Context) {
-	var result *business.InstrumentDataResponse
-	var config *ds.DataConfig
+func GetBrokerProductById(tx *gorm.DB, id uint) (*BrokerProduct, error) {
+	var list []BrokerProduct
+	res := tx.Find(&list, id)
 
-	id, err   := c.GetIdFromUrl()
-	timeframe := c.GetParamAsString("timeframe",  "5m")
-
-	if err == nil {
-		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			cfg, err := business.CreateDataConfig(tx, id)
-			config = cfg
-			return err
-		})
-
-		if err == nil {
-			config.Timeframe = timeframe
-			spec := &business.InstrumentDataSpec{
-				Id       : id,
-				From     : c.GetParamAsString("from",     ""),
-				To       : c.GetParamAsString("to",       ""),
-				Timezone : c.GetParamAsString("timezone", "UTC"),
-				Reduction: c.GetParamAsString("reduction",""),
-				Config   : config,
-			}
-			result, err = business.GetInstrumentDataById(c, spec)
-			if err == nil {
-				_=c.ReturnObject(result)
-				return
-			}
-		}
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	c.ReturnError(err)
+	if len(list) == 1 {
+		return &list[0], nil
+	}
+
+	return nil, nil
+}
+
+//=============================================================================
+
+func AddBrokerProduct(tx *gorm.DB, p *BrokerProduct) error {
+	return tx.Create(p).Error
+}
+
+//=============================================================================
+
+func UpdateBrokerProduct(tx *gorm.DB, p *BrokerProduct) error {
+	return tx.Save(p).Error
 }
 
 //=============================================================================

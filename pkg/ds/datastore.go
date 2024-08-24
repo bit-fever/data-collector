@@ -114,14 +114,12 @@ func DeleteDataFile(filename string) error {
 //===
 //=============================================================================
 
-func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.Location) ([]*DataPoint, error) {
-	var list []*DataPoint
-
+func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.Location, da *DataAggregator) error {
 	query := buildGetQuery(config)
 
 	rows, err := pool.Query(context.Background(), query, config.Symbol, config.Selector, from, to)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	defer rows.Close()
@@ -131,18 +129,20 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.Volume)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		dp.Time = dp.Time.In(loc)
-		list = append(list, &dp)
+		da.Add(&dp)
 	}
+
+	da.Flush()
 
 	if rows.Err() != nil {
-		return nil, rows.Err()
+		return rows.Err()
 	}
 
-	return list, nil
+	return nil
 }
 
 //=============================================================================

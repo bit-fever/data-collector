@@ -38,12 +38,12 @@ import (
 
 //=============================================================================
 
-func getInstrumentsBySourceId(c *auth.Context) {
+func getDataInstrumentsByProductId(c *auth.Context) {
 	pId, err := c.GetIdFromUrl()
 
 	if err == nil {
 		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			list, err := business.GetInstrumentsBySourceId(tx, c, pId)
+			list, err := business.GetDataInstrumentsByProductId(tx, c, pId)
 
 			if err != nil {
 				return err
@@ -58,8 +58,8 @@ func getInstrumentsBySourceId(c *auth.Context) {
 
 //=============================================================================
 
-func uploadInstrumentData(c *auth.Context) {
-	sourceId, err := c.GetIdFromUrl()
+func uploadDataInstrumentData(c *auth.Context) {
+	productId, err := c.GetIdFromUrl()
 
 	start := time.Now()
 
@@ -83,7 +83,7 @@ func uploadInstrumentData(c *auth.Context) {
 
 						if err == nil {
 							err = db.RunInTransaction(func(tx *gorm.DB) error {
-								return business.AddInstrumentAndJob(tx, c, sourceId, spec, filename, bytes)
+								return business.AddDataInstrumentAndJob(tx, c, productId, spec, filename, bytes)
 							})
 
 							if err == nil {

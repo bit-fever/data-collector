@@ -110,7 +110,7 @@ func ingestDatafile(job *db.UploadJob) (*ParserContext, error) {
 		return nil,err
 	}
 
-	config,err := retrieveConfig(job.InstrumentId)
+	config,err := retrieveConfig(job.DataInstrumentId)
 	if err != nil {
 		return nil,err
 	}
@@ -167,7 +167,7 @@ func retrieveConfig(id uint) (*ds.DataConfig, error) {
 
 func updateJob(job *db.UploadJob, dr *DataRange) error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
-		i, err := db.GetInstrumentById(tx, job.InstrumentId)
+		i, err := db.GetDataInstrumentById(tx, job.DataInstrumentId)
 		if err == nil {
 			err = updateLoadedPeriod(tx, i, dr)
 			if err == nil {
@@ -181,7 +181,7 @@ func updateJob(job *db.UploadJob, dr *DataRange) error {
 
 //=============================================================================
 
-func updateLoadedPeriod(tx *gorm.DB, i *db.Instrument, dr *DataRange) error {
+func updateLoadedPeriod(tx *gorm.DB, i *db.DataInstrument, dr *DataRange) error {
 	//--- Update loaded period
 
 	if i.DataFrom == 0 || i.DataFrom > dr.FromDay {
@@ -195,7 +195,7 @@ func updateLoadedPeriod(tx *gorm.DB, i *db.Instrument, dr *DataRange) error {
 	if !i.IsContinuous {
 		i.ExpirationDate = i.DataTo
 	}
-	return db.UpdateInstrument(tx, i)
+	return db.UpdateDataInstrument(tx, i)
 }
 
 //=============================================================================
@@ -219,17 +219,17 @@ func setJobInAdding(job *db.UploadJob) error {
 
 func setJobInReady(job *db.UploadJob) error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
-		var i *db.Instrument
+		var i *db.DataInstrument
 
 		job.Status  = db.UploadJobStatusReady
 		job.Progress= 100
 
 		err := db.UpdateUploadJob(tx, job)
 		if err == nil {
-			i, err = db.GetInstrumentById(tx, job.InstrumentId)
+			i, err = db.GetDataInstrumentById(tx, job.DataInstrumentId)
 			if err == nil {
 				i.Status = db.InstrumentStatusReady
-				err = db.UpdateInstrument(tx, i)
+				err = db.UpdateDataInstrument(tx, i)
 			}
 		}
 
@@ -245,10 +245,10 @@ func setJobInError(err error, job *db.UploadJob) {
 		job.Error = err.Error()
 		_ = db.UpdateUploadJob(tx, job)
 
-		i, err := db.GetInstrumentById(tx, job.InstrumentId)
+		i, err := db.GetDataInstrumentById(tx, job.DataInstrumentId)
 		if err == nil {
 			i.Status = db.InstrumentStatusError
-			_ = db.UpdateInstrument(tx, i)
+			_ = db.UpdateDataInstrument(tx, i)
 		}
 
 		return nil
@@ -263,12 +263,12 @@ func calcAggregates(context *ParserContext) error {
 	err := saveAggregate(da5m, config, "5m")
 
 	if err == nil {
-		da15m := NewDataAggregator(TimeSlotFunction15m)
-		aggregate(da5m, da15m)
+		da15m := ds.NewDataAggregator(ds.TimeSlotFunction15m)
+		da5m.Aggregate(da15m)
 		err = saveAggregate(da15m, config, "15m")
 		if err == nil {
-			da60m := NewDataAggregator(TimeSlotFunction60m)
-			aggregate(da15m, da60m)
+			da60m := ds.NewDataAggregator(ds.TimeSlotFunction60m)
+			da15m.Aggregate(da60m)
 			err = saveAggregate(da60m, config, "60m")
 		}
 	}
@@ -278,7 +278,7 @@ func calcAggregates(context *ParserContext) error {
 
 //=============================================================================
 
-func saveAggregate(da *DataAggregator, config *ds.DataConfig, timeframe string) error {
+func saveAggregate(da *ds.DataAggregator, config *ds.DataConfig, timeframe string) error {
 	var dataPoints []*ds.DataPoint
 	config.Timeframe = timeframe
 
@@ -294,16 +294,6 @@ func saveAggregate(da *DataAggregator, config *ds.DataConfig, timeframe string) 
 	}
 
 	return ds.SetDataPoints(dataPoints, config)
-}
-
-//=============================================================================
-
-func aggregate(daSrc *DataAggregator, daDes *DataAggregator) {
-	for _,dp := range daSrc.DataPoints() {
-		daDes.Add(dp)
-	}
-
-	daDes.Flush()
 }
 
 //=============================================================================

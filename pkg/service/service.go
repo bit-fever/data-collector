@@ -39,11 +39,19 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 
 	ctrl := auth.NewOidcController(cfg.Authentication.Authority, req.GetClient("bf"), logger, cfg)
 
-	router.GET ("/api/collector/v1/config/parsers",           ctrl.Secure(getParsers,               roles.Admin_User_Service))
-	router.GET ("/api/collector/v1/instruments/:id/data",     ctrl.Secure(getInstrumentData,        roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/config/parsers",                     ctrl.Secure(getParsers,                    roles.Admin_User_Service))
 
-	router.GET ("/api/collector/v1/products/:id/instruments", ctrl.Secure(getInstrumentsBySourceId, roles.Admin_User_Service))
-	router.POST("/api/collector/v1/products/:id/instruments", ctrl.Secure(uploadInstrumentData,     roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/data-instruments",                   ctrl.Secure(getDataInstruments,            roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/data-instruments/:id/data",          ctrl.Secure(getDataInstrumentData,         roles.Admin_User_Service))
+
+	router.GET ("/api/collector/v1/data-products/:id/instruments",      ctrl.Secure(getDataInstrumentsByProductId, roles.Admin_User_Service))
+	router.POST("/api/collector/v1/data-products/:id/instruments",      ctrl.Secure(uploadDataInstrumentData,      roles.Admin_User_Service))
+
+	router.GET ("/api/collector/v1/bias-analyses",                      ctrl.Secure(getBiasAnalyses,               roles.Admin_User_Service))
+	router.POST("/api/collector/v1/bias-analyses",                      ctrl.Secure(addBiasAnalysis,               roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/bias-analyses/:id",                  ctrl.Secure(getBiasAnalysisById,           roles.Admin_User_Service))
+	router.PUT ("/api/collector/v1/bias-analyses/:id",                  ctrl.Secure(updateBiasAnalysis,            roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/bias-analysis/:id/summary",          ctrl.Secure(getBiasSummary,                roles.Admin_User_Service))
 }
 
 //=============================================================================

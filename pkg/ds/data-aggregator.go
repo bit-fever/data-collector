@@ -22,10 +22,9 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package upload
+package ds
 
 import (
-	"github.com/bit-fever/data-collector/pkg/ds"
 	"math"
 	"time"
 )
@@ -37,8 +36,8 @@ type TimeSlotFunction func(t time.Time) time.Time
 //=============================================================================
 
 type DataAggregator struct {
-	currDp       *ds.DataPoint
-	dataPoints   []*ds.DataPoint
+	currDp       *DataPoint
+	dataPoints   []*DataPoint
 	timeSlotFunc TimeSlotFunction
 }
 
@@ -46,7 +45,7 @@ type DataAggregator struct {
 
 func NewDataAggregator(f TimeSlotFunction) *DataAggregator {
 	da := &DataAggregator{}
-	da.dataPoints   = []*ds.DataPoint{}
+	da.dataPoints   = []*DataPoint{}
 	da.timeSlotFunc = f
 	return da
 }
@@ -57,7 +56,16 @@ func NewDataAggregator(f TimeSlotFunction) *DataAggregator {
 //===
 //=============================================================================
 
-func (a *DataAggregator) Add(dp *ds.DataPoint) {
+func (a *DataAggregator) Add(dp *DataPoint) {
+	//--- Handle the no aggregation case
+
+	if a.timeSlotFunc == nil {
+		a.dataPoints = append(a.dataPoints, dp)
+		return
+	}
+
+	//--- Aggregation required
+
 	if a.currDp == nil {
 		a.currDp = a.createInitialDataPoint(dp)
 	} else {
@@ -81,8 +89,18 @@ func (a *DataAggregator) Flush() {
 
 //=============================================================================
 
-func (a *DataAggregator) DataPoints() []*ds.DataPoint {
+func (a *DataAggregator) DataPoints() []*DataPoint {
 	return a.dataPoints
+}
+
+//=============================================================================
+
+func (a *DataAggregator) Aggregate(daDes *DataAggregator) {
+	for _,dp := range a.DataPoints() {
+		daDes.Add(dp)
+	}
+
+	daDes.Flush()
 }
 
 //=============================================================================
@@ -91,8 +109,8 @@ func (a *DataAggregator) DataPoints() []*ds.DataPoint {
 //===
 //=============================================================================
 
-func (a *DataAggregator) createInitialDataPoint(dp *ds.DataPoint) *ds.DataPoint {
-	return &ds.DataPoint{
+func (a *DataAggregator) createInitialDataPoint(dp *DataPoint) *DataPoint {
+	return &DataPoint{
 		Time  : a.timeSlotFunc(dp.Time),
 		Open  : dp.Open,
 		High  : dp.High,
@@ -104,7 +122,7 @@ func (a *DataAggregator) createInitialDataPoint(dp *ds.DataPoint) *ds.DataPoint 
 
 //=============================================================================
 
-func (a *DataAggregator) Merge(dp *ds.DataPoint) {
+func (a *DataAggregator) Merge(dp *DataPoint) {
 	cp := a.currDp
 
 	cp.High    = math.Max(cp.High, dp.High)
@@ -136,6 +154,21 @@ func TimeSlotFunction5m(dpTime time.Time) time.Time {
 
 //=============================================================================
 
+func TimeSlotFunction10m(dpTime time.Time) time.Time {
+	mins := dpTime.Minute()
+
+	if mins ==  0 { return dpTime }
+	if mins <= 10 { return dpTime.Add(time.Minute * time.Duration(10-mins)) }
+	if mins <= 20 { return dpTime.Add(time.Minute * time.Duration(20-mins)) }
+	if mins <= 30 { return dpTime.Add(time.Minute * time.Duration(30-mins)) }
+	if mins <= 40 { return dpTime.Add(time.Minute * time.Duration(40-mins)) }
+	if mins <= 50 { return dpTime.Add(time.Minute * time.Duration(50-mins)) }
+
+	return dpTime.Add(time.Minute * time.Duration(60-mins))
+}
+
+//=============================================================================
+
 func TimeSlotFunction15m(dpTime time.Time) time.Time {
 	mins := dpTime.Minute()
 
@@ -143,6 +176,17 @@ func TimeSlotFunction15m(dpTime time.Time) time.Time {
 	if mins <= 15 { return dpTime.Add(time.Minute * time.Duration(15-mins)) }
 	if mins <= 30 { return dpTime.Add(time.Minute * time.Duration(30-mins)) }
 	if mins <= 45 { return dpTime.Add(time.Minute * time.Duration(45-mins)) }
+
+	return dpTime.Add(time.Minute * time.Duration(60-mins))
+}
+
+//=============================================================================
+
+func TimeSlotFunction30m(dpTime time.Time) time.Time {
+	mins := dpTime.Minute()
+
+	if mins ==  0 { return dpTime }
+	if mins <= 30 { return dpTime.Add(time.Minute * time.Duration(30-mins)) }
 
 	return dpTime.Add(time.Minute * time.Duration(60-mins))
 }

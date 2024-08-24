@@ -42,12 +42,21 @@ var DefaultTo   = time.Date(3000,1,1,0,0,0,0, time.UTC)
 
 //=============================================================================
 
-func CreateDataConfig(tx *gorm.DB, id uint) (*ds.DataConfig, error) {
-	var p *db.Product
+func GetDataInstruments(tx *gorm.DB, c *auth.Context) (*[]db.DataInstrumentFull, error) {
+	filter := map[string]any{}
+	filter["username"] = c.Session.Username
 
-	i, err := db.GetInstrumentById(tx, id)
+	return db.GetDataInstrumentsFull(tx, filter)
+}
+
+//=============================================================================
+
+func CreateDataConfig(tx *gorm.DB, id uint) (*ds.DataConfig, error) {
+	var p *db.DataProduct
+
+	i, err := db.GetDataInstrumentById(tx, id)
 	if err == nil {
-		p, err = db.GetProductById(tx, i.ProductId)
+		p, err = db.GetDataProductById(tx, i.DataProductId)
 		if err == nil {
 			return createConfig(i, p), nil
 		}
@@ -58,25 +67,27 @@ func CreateDataConfig(tx *gorm.DB, id uint) (*ds.DataConfig, error) {
 
 //=============================================================================
 
-func GetInstrumentDataById(c *auth.Context, spec *InstrumentDataSpec)(*InstrumentDataResponse, error) {
+func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*DataInstrumentDataResponse, error) {
 	params,err := parseInstrumentDataParams(spec)
 	if err != nil {
 		return nil, err
 	}
 
 	start := time.Now()
-	dataPoints,err := ds.GetDataPoints(params.From, params.To, spec.Config, params.Location)
-	dur := time.Now().Sub(start).Seconds()
+	err    = ds.GetDataPoints(params.From, params.To, spec.Config, params.Location, params.Aggregator)
+	dur   := time.Now().Sub(start).Seconds()
 	if err != nil {
 		return nil, err
 	}
+
+	dataPoints := params.Aggregator.DataPoints()
 
 	c.Log.Info("GetInstrumentDataById: Query stats", "duration", dur, "records", len(dataPoints))
 
 	reduced := false
 	dataPoints,reduced = reduceDataPoints(dataPoints, params.Reduction)
 
-	return &InstrumentDataResponse{
+	return &DataInstrumentDataResponse{
 		Id         : spec.Id,
 		Symbol     : spec.Config.Symbol,
 		From       : params.From.Format(time.DateTime),
@@ -96,7 +107,7 @@ func GetInstrumentDataById(c *auth.Context, spec *InstrumentDataSpec)(*Instrumen
 //===
 //=============================================================================
 
-func createConfig(i *db.Instrument, p *db.Product) *ds.DataConfig {
+func createConfig(i *db.DataInstrument, p *db.DataProduct) *ds.DataConfig {
 	var selector  any
 	var userTable bool
 
@@ -119,7 +130,7 @@ func createConfig(i *db.Instrument, p *db.Product) *ds.DataConfig {
 
 //=============================================================================
 
-func parseInstrumentDataParams(spec *InstrumentDataSpec) (*InstrumentDataParams, error) {
+func parseInstrumentDataParams(spec *DataInstrumentDataSpec) (*DataInstrumentDataParams, error) {
 	loc,err := getLocation(spec.Timezone, spec.Config)
 	if err != nil {
 		return nil, errors.New("Bad timezone: "+ spec.Timezone +" ("+ err.Error() +")")
@@ -136,8 +147,9 @@ func parseInstrumentDataParams(spec *InstrumentDataSpec) (*InstrumentDataParams,
 		return nil, errors.New("Bad 'to' parameter: "+ spec.To +" ("+ err2.Error() +")")
 	}
 
-	if err = checkTimeframe(spec.Config.Timeframe); err != nil {
-		return nil, errors.New("Bad timeframe: "+ spec.Config.Timeframe +" ("+ err.Error() +")")
+	da, err3 := buildDataAggregator(spec.Config)
+	if err3 != nil {
+		return nil, errors.New("Bad timeframe: "+ spec.Config.Timeframe +" ("+ err3.Error() +")")
 	}
 
 	red, err := parseReduction(spec.Reduction)
@@ -146,11 +158,12 @@ func parseInstrumentDataParams(spec *InstrumentDataSpec) (*InstrumentDataParams,
 		return nil, errors.New("Bad reduction: "+ spec.Reduction +" ("+ err.Error() +")")
 	}
 
-	return &InstrumentDataParams{
-		Location : loc,
-		From     : from,
-		To       : to,
-		Reduction: red,
+	return &DataInstrumentDataParams{
+		Location  : loc,
+		From      : from,
+		To        : to,
+		Reduction : red,
+		Aggregator: da,
 	}, nil
 }
 
@@ -176,12 +189,23 @@ func parseTime(t string, defValue time.Time, loc *time.Location) (time.Time, err
 
 //=============================================================================
 
-func checkTimeframe(tf string) error {
+func buildDataAggregator(config *ds.DataConfig) (*ds.DataAggregator, error) {
+	tf := config.Timeframe
+
 	if tf=="1m" || tf=="5m" || tf=="15m" || tf=="60m" {
-		return nil
+		return ds.NewDataAggregator(nil), nil
 	}
 
-	return errors.New("allowed values are 1m, 5m, 15m, 60m")
+	if tf=="10m" {
+		config.Timeframe = "5m"
+		return ds.NewDataAggregator(ds.TimeSlotFunction10m), nil
+	}
+	if tf=="30m" {
+		config.Timeframe = "15m"
+		return ds.NewDataAggregator(ds.TimeSlotFunction30m), nil
+	}
+
+	return nil, errors.New("allowed values are 1m, 5m, 10m, 15m, 30m, 60m")
 }
 
 //=============================================================================

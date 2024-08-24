@@ -27,10 +27,6 @@ package db
 import "time"
 
 //=============================================================================
-//===
-//=== Entities
-//===
-//=============================================================================
 
 type Common struct {
 	Id        uint      `json:"id" gorm:"primaryKey"`
@@ -39,10 +35,13 @@ type Common struct {
 }
 
 //=============================================================================
+//===
+//=== Data entities
+//===
+//=============================================================================
 
-type Product struct {
+type DataProduct struct {
 	Id                   uint    `json:"id" gorm:"primaryKey"`
-	SourceId             uint    `json:"sourceId"`
 	Symbol               string  `json:"symbol"`
 	Username             string  `json:"username"`
 	SystemCode           string  `json:"systemCode"`
@@ -57,9 +56,9 @@ const InstrumentStatusReady      =  0
 const InstrumentStatusProcessing =  1
 const InstrumentStatusError      = -1
 
-type Instrument struct {
+type DataInstrument struct {
 	Id               uint    `json:"id" gorm:"primaryKey"`
-	ProductId        uint    `json:"productId"`
+	DataProductId    uint    `json:"dataProductId"`
 	Symbol           string  `json:"symbol"`
 	Name             string  `json:"name"`
 	ExpirationDate   int     `json:"expirationDate,omitempty"`
@@ -67,6 +66,15 @@ type Instrument struct {
 	Status           int8    `json:"status"`
 	DataFrom         int     `json:"dataFrom"`
 	DataTo           int     `json:"dataTo"`
+}
+
+//=============================================================================
+
+type DataInstrumentFull struct {
+	DataInstrument
+	ProductSymbol  string `json:"productSymbol"`
+	SystemCode     string `json:"systemCode"`
+	ConnectionCode string `json:"connectionCode"`
 }
 
 //=============================================================================
@@ -79,7 +87,7 @@ const UploadJobStatusError       = -1
 
 type UploadJob struct {
 	Id               uint    `json:"id" gorm:"primaryKey"`
-	InstrumentId     uint    `json:"instrumentId"`
+	DataInstrumentId uint    `json:"dataInstrumentId"`
 	Status           int8    `json:"status"`
 	Filename         string  `json:"filename"`
 	Error            string  `json:"error"`
@@ -93,10 +101,60 @@ type UploadJob struct {
 //=============================================================================
 
 type LoadedPeriod struct {
-	Id           uint   `json:"id" gorm:"primaryKey"`
-	InstrumentId uint   `json:"instrumentId"`
-	Day          int    `json:"day"`
-	Status       int    `json:"status"`
+	Id               uint   `json:"id" gorm:"primaryKey"`
+	DataInstrumentId uint   `json:"dataInstrumentId"`
+	Day              int    `json:"day"`
+	Status           int    `json:"status"`
+}
+
+//=============================================================================
+//===
+//=== Broker entities
+//===
+//=============================================================================
+
+type BrokerProduct struct {
+	Id               uint    `json:"id" gorm:"primaryKey"`
+	Symbol           string  `json:"symbol"`
+	Username         string  `json:"username"`
+	Name             string  `json:"name"`
+	PointValue       float32 `json:"pointValue"`
+	CostPerTrade     float32 `json:"costPerTrade"`
+	CurrencyCode     string  `json:"currencyCode"`
+}
+
+//=============================================================================
+//===
+//=== Bias analysis
+//===
+//=============================================================================
+
+type BiasAnalysis struct {
+	Common
+	Username          string  `json:"username"`
+	DataInstrumentId  uint    `json:"dataInstrumentId"`
+	BrokerProductId   uint    `json:"brokerProductId"`
+	Name              string  `json:"name"`
+	Notes             string  `json:"notes"`
+}
+
+//=============================================================================
+
+type BiasAnalysisFull struct {
+	BiasAnalysis
+	BrokerSymbol   string  `json:"brokerSymbol"`
+	BrokerName     string  `json:"brokerName"`
+}
+
+//=============================================================================
+
+type BiasConfig struct {
+	Id              uint   `json:"id" gorm:"primaryKey"`
+	BiasAnalysisId  uint   `json:"biasAnalysisId"`
+	StartSlot       int16  `json:"startSlot"`
+	EndSlot         int16  `json:"endSlot"`
+	Months          int16  `json:"months"`
+	Excludes        string `json:"excludes"`
 }
 
 //=============================================================================
@@ -105,9 +163,12 @@ type LoadedPeriod struct {
 //===
 //=============================================================================
 
-func (Product)      TableName() string { return "product"       }
-func (Instrument)   TableName() string { return "instrument"    }
-func (LoadedPeriod) TableName() string { return "loaded_period" }
-func (UploadJob)    TableName() string { return "upload_job"    }
+func (DataProduct)    TableName() string { return "data_product"    }
+func (DataInstrument) TableName() string { return "data_instrument" }
+func (BrokerProduct)  TableName() string { return "broker_product"  }
+func (LoadedPeriod)   TableName() string { return "loaded_period"   }
+func (UploadJob)      TableName() string { return "upload_job"      }
+func (BiasAnalysis)   TableName() string { return "bias_analysis"   }
+func (BiasConfig)     TableName() string { return "bias_config"     }
 
 //=============================================================================

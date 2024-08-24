@@ -40,7 +40,7 @@ type ParserContext struct {
 	Location   *time.Location
 	Job        *db.UploadJob
 	DataRange  *DataRange
-	DataAggreg *DataAggregator
+	DataAggreg *ds.DataAggregator
 
 	//--- Private stuff
 
@@ -64,7 +64,7 @@ func NewParserContext(file io.Reader, config *ds.DataConfig, loc *time.Location,
 
 	c.dataPoints = []*ds.DataPoint{}
 	c.DataRange  = &DataRange{}
-	c.DataAggreg = NewDataAggregator(TimeSlotFunction5m)
+	c.DataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m)
 
 	return c
 }

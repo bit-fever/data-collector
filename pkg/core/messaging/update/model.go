@@ -25,15 +25,15 @@ THE SOFTWARE.
 package update
 
 //=============================================================================
+//===
+//=== General entities
+//===
+//=============================================================================
 
-type ProductData struct {
-	Id            uint    `json:"id"`
-	ConnectionId  uint    `json:"connectionId"`
-	ExchangeId    uint    `json:"exchangeId"`
-	Username      string  `json:"username"`
-	Symbol        string  `json:"symbol"`
-	Name          string  `json:"name"`
-	Increment     float64 `json:"increment"`
+type Currency struct {
+	Id   uint   `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 //=============================================================================
@@ -62,11 +62,51 @@ type Exchange struct {
 }
 
 //=============================================================================
+//===
+//=== Data product
+//===
+//=============================================================================
 
-type ProductDataMessage struct {
-	ProductData ProductData `json:"productData"`
+type DataProduct struct {
+	Id            uint    `json:"id"`
+	ConnectionId  uint    `json:"connectionId"`
+	ExchangeId    uint    `json:"exchangeId"`
+	Username      string  `json:"username"`
+	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
+	Increment     float64 `json:"increment"`
+}
+
+//=============================================================================
+
+type DataProductMessage struct {
+	DataProduct DataProduct `json:"dataProduct"`
 	Connection  Connection  `json:"connection"`
 	Exchange    Exchange    `json:"exchange"`
+}
+
+//=============================================================================
+//===
+//=== Broker product
+//===
+//=============================================================================
+
+type BrokerProduct struct {
+	Id               uint     `json:"id"`
+	Username         string   `json:"username"`
+	Symbol           string   `json:"symbol"`
+	Name             string   `json:"name"`
+	PointValue       float32  `json:"pointValue"`
+	CostPerTrade     float32  `json:"costPerTrade"`
+}
+
+//=============================================================================
+
+type BrokerProductMessage struct {
+	BrokerProduct BrokerProduct `json:"brokerProduct"`
+	Connection    Connection    `json:"connection"`
+	Exchange      Exchange      `json:"exchange"`
+	Currency      Currency      `json:"currency"`
 }
 
 //=============================================================================

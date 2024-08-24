@@ -25,6 +25,7 @@ THE SOFTWARE.
 package business
 
 import (
+	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"time"
 )
@@ -51,10 +52,10 @@ type DatafileUploadResponse struct {
 }
 
 //=============================================================================
-//=== Get data response
+//=== Get data request & response
 //=============================================================================
 
-type InstrumentDataSpec struct {
+type DataInstrumentDataSpec struct {
 	Id        uint
 	From      string
 	To        string
@@ -65,16 +66,17 @@ type InstrumentDataSpec struct {
 
 //=============================================================================
 
-type InstrumentDataParams struct {
+type DataInstrumentDataParams struct {
 	Location  *time.Location
 	From       time.Time
 	To         time.Time
 	Reduction  int
+	Aggregator *ds.DataAggregator
 }
 
 //=============================================================================
 
-type InstrumentDataResponse struct {
+type DataInstrumentDataResponse struct {
 	Id          uint            `json:"id"`
 	Symbol      string          `json:"symbol"`
 	From        string          `json:"from"`
@@ -85,6 +87,105 @@ type InstrumentDataResponse struct {
 	Reduced     bool            `json:"reduced"`
 	Records     int             `json:"records"`
 	DataPoints  []*ds.DataPoint `json:"dataPoints"`
+}
+
+//=============================================================================
+//=== Bias analysis
+//=============================================================================
+
+type BiasAnalysisSpec struct {
+	DataInstrumentId  uint    `json:"dataInstrumentId"`
+	BrokerProductId   uint    `json:"brokerProductId"`
+	Name              string  `json:"name"`
+	Notes             string  `json:"notes"`
+}
+
+//=============================================================================
+
+type BiasAnalysisExt struct {
+	db.BiasAnalysis
+	DataInstrument db.DataInstrument  `json:"dataInstrument"`
+	BrokerProduct  db.BrokerProduct   `json:"brokerProduct"`
+	Configs        *[]db.BiasConfig   `json:"configs"`
+}
+
+//=============================================================================
+
+type BiasSummaryResponse struct {
+	Result  [7]*DataPointDowList `json:"result"`
+}
+
+//-----------------------------------------------------------------------------
+
+func NewBiasSummaryResponse() *BiasSummaryResponse {
+	return &BiasSummaryResponse{
+		Result: [7]*DataPointDowList{},
+	}
+}
+
+//-----------------------------------------------------------------------------
+
+func (r *BiasSummaryResponse) Add(dpd *DataPointDelta) {
+	dpdl := r.Result[dpd.Dow]
+	if dpdl == nil {
+		dpdl = &DataPointDowList{
+			Slots: [48]*DataPointSlotList{},
+		}
+
+		r.Result[dpd.Dow] = dpdl
+	}
+
+	dpdl.Add(dpd)
+}
+
+//=============================================================================
+
+type DataPointDowList struct {
+	Slots [48]*DataPointSlotList `json:"slots"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (l *DataPointDowList) Add(dpd *DataPointDelta) {
+	slot := (dpd.Hour * 60 + dpd.Min) / 30
+	dpsl := l.Slots[slot]
+	if dpsl == nil {
+		dpsl = &DataPointSlotList{
+			List: []*DataPointEntry{},
+		}
+
+		l.Slots[slot] = dpsl
+	}
+
+	l.Slots[slot].Add(dpd)
+}
+
+//=============================================================================
+
+type DataPointSlotList struct {
+	List []*DataPointEntry `json:"list"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (l *DataPointSlotList) Add(dpd *DataPointDelta) {
+	dpe := &DataPointEntry{
+		Year : int16(dpd.Year),
+		Month: int8(dpd.Month),
+		Day  : int8(dpd.Day),
+		Delta: dpd.Delta,
+	}
+
+	l.List = append(l.List, dpe)
+}
+
+//=============================================================================
+
+type DataPointEntry struct {
+	Year  int16   `json:"year"`
+	Month int8    `json:"month"`
+	Day   int8    `json:"day"`
+	Delta float64 `json:"delta"`
 }
 
 //=============================================================================
