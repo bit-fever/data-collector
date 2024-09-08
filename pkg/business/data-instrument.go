@@ -67,6 +67,27 @@ func CreateDataConfig(tx *gorm.DB, id uint) (*ds.DataConfig, error) {
 
 //=============================================================================
 
+func GetDataInstrumentById(tx *gorm.DB, c *auth.Context, id uint, details bool) (*DataInstrumentExt, error) {
+	c.Log.Info("GetDataInstrumentById: Getting a data instrument", "id", id)
+
+	di, err := db.GetDataInstrumentById(tx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if details {
+		//--- Add details (if any)
+	}
+
+	die := DataInstrumentExt{
+		DataInstrument: *di,
+	}
+
+	return &die, nil
+}
+
+//=============================================================================
+
 func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*DataInstrumentDataResponse, error) {
 	params,err := parseInstrumentDataParams(spec)
 	if err != nil {

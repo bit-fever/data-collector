@@ -142,6 +142,8 @@ type BiasAnalysis struct {
 
 type BiasAnalysisFull struct {
 	BiasAnalysis
+	DataSymbol     string  `json:"dataSymbol"`
+	DataName       string  `json:"dataName"`
 	BrokerSymbol   string  `json:"brokerSymbol"`
 	BrokerName     string  `json:"brokerName"`
 }
@@ -149,12 +151,17 @@ type BiasAnalysisFull struct {
 //=============================================================================
 
 type BiasConfig struct {
-	Id              uint   `json:"id" gorm:"primaryKey"`
-	BiasAnalysisId  uint   `json:"biasAnalysisId"`
-	StartSlot       int16  `json:"startSlot"`
-	EndSlot         int16  `json:"endSlot"`
-	Months          int16  `json:"months"`
-	Excludes        string `json:"excludes"`
+	Id              uint    `json:"id" gorm:"primaryKey"`
+	BiasAnalysisId  uint    `json:"biasAnalysisId"`
+	StartDay        int16   `json:"startDay"`
+	StartSlot       int16   `json:"startSlot"`
+	EndDay          int16   `json:"endDay"`
+	EndSlot         int16   `json:"endSlot"`
+	Months          int16   `json:"months"`
+	Excludes        string  `json:"excludes"`
+	Operation       int8    `json:"operation"`
+	GrossProfit     float64 `json:"grossProfit"`
+	NetProfit       float64 `json:"netProfit"`
 }
 
 //=============================================================================

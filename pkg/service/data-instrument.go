@@ -50,6 +50,30 @@ func getDataInstruments(c *auth.Context) {
 
 //=============================================================================
 
+func getDataInstrumentById(c *auth.Context) {
+	id, err := c.GetIdFromUrl()
+
+	if err == nil {
+		details, err := c.GetParamAsBool("details", false)
+
+		if err == nil {
+			err = db.RunInTransaction(func(tx *gorm.DB) error {
+				di, err := business.GetDataInstrumentById(tx, c, id, details)
+
+				if err != nil {
+					return err
+				}
+
+				return c.ReturnObject(di)
+			})
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+
 func getDataInstrumentData(c *auth.Context) {
 	var result *business.DataInstrumentDataResponse
 	var config *ds.DataConfig

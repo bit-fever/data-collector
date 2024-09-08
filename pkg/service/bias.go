@@ -28,10 +28,11 @@ import (
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
-	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 )
 
+//=============================================================================
+//=== BiasAnalysis
 //=============================================================================
 
 func getBiasAnalyses(c *auth.Context) {
@@ -128,24 +129,126 @@ func updateBiasAnalysis(c *auth.Context) {
 }
 
 //=============================================================================
+//=== BiasConfig
+//=============================================================================
+
+func getBiasConfigsByAnalysisId(c *auth.Context) {
+	id, err := c.GetIdFromUrl()
+
+	if err == nil {
+		err = db.RunInTransaction(func(tx *gorm.DB) error {
+			list, err := business.GetBiasConfigsByAnalysisId(tx, c, id)
+
+			if err != nil {
+				return err
+			}
+
+			return c.ReturnList(list, 0, 5000, len(*list))
+		})
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+
+func addBiasConfig(c *auth.Context) {
+	baId, err := c.GetIdFromUrl()
+
+	if err == nil {
+		var bcs business.BiasConfigSpec
+		err = c.BindParamsFromBody(&bcs)
+
+		if err == nil {
+			err = db.RunInTransaction(func(tx *gorm.DB) error {
+				bc, err := business.AddBiasConfig(tx, c, baId, &bcs)
+
+				if err != nil {
+					return err
+				}
+
+				return c.ReturnObject(bc)
+			})
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+
+func updateBiasConfig(c *auth.Context) {
+	baId, err := c.GetIdFromUrl()
+
+	if err == nil {
+		var bcId uint
+		bcId, err = c.GetId2FromUrl()
+
+		if err == nil {
+			var bcs business.BiasConfigSpec
+			err = c.BindParamsFromBody(&bcs)
+
+			if err == nil {
+				err = db.RunInTransaction(func(tx *gorm.DB) error {
+					bc, err := business.UpdateBiasConfig(tx, c, baId, bcId, &bcs)
+
+					if err != nil {
+						return err
+					}
+
+					return c.ReturnObject(bc)
+				})
+			}
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+
+func deleteBiasConfig(c *auth.Context) {
+	baId, err := c.GetIdFromUrl()
+
+	if err == nil {
+		var bcId uint
+		bcId, err = c.GetId2FromUrl()
+
+		if err == nil {
+			err = db.RunInTransaction(func(tx *gorm.DB) error {
+				bc, err := business.DeleteBiasConfig(tx, c, baId, bcId)
+
+				if err != nil {
+					return err
+				}
+
+				return c.ReturnObject(bc)
+			})
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+//=== Summary
+//=============================================================================
 
 func getBiasSummary(c *auth.Context) {
 	id, err := c.GetIdFromUrl()
 
 	if err == nil {
-		var config *ds.DataConfig
+		var bsr *business.BiasSummaryResponse
 
 		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			cfg, err := business.CreateDataConfig(tx, id)
-			config = cfg
+			bsr, err = business.GetBiasSummaryInfo(tx, c, id)
 			return err
 		})
 
 		if err == nil {
-			var response *business.BiasSummaryResponse
-			response, err = business.GetBiasSummary(c, id, config)
+			err = business.GetBiasSummaryData(c, id, bsr)
 			if err == nil {
-				_=c.ReturnObject(response)
+				_=c.ReturnObject(bsr)
 				return
 			}
 		}

@@ -42,6 +42,7 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 	router.GET ("/api/collector/v1/config/parsers",                     ctrl.Secure(getParsers,                    roles.Admin_User_Service))
 
 	router.GET ("/api/collector/v1/data-instruments",                   ctrl.Secure(getDataInstruments,            roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/data-instruments/:id",               ctrl.Secure(getDataInstrumentById,         roles.Admin_User_Service))
 	router.GET ("/api/collector/v1/data-instruments/:id/data",          ctrl.Secure(getDataInstrumentData,         roles.Admin_User_Service))
 
 	router.GET ("/api/collector/v1/data-products/:id/instruments",      ctrl.Secure(getDataInstrumentsByProductId, roles.Admin_User_Service))
@@ -51,7 +52,12 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 	router.POST("/api/collector/v1/bias-analyses",                      ctrl.Secure(addBiasAnalysis,               roles.Admin_User_Service))
 	router.GET ("/api/collector/v1/bias-analyses/:id",                  ctrl.Secure(getBiasAnalysisById,           roles.Admin_User_Service))
 	router.PUT ("/api/collector/v1/bias-analyses/:id",                  ctrl.Secure(updateBiasAnalysis,            roles.Admin_User_Service))
-	router.GET ("/api/collector/v1/bias-analysis/:id/summary",          ctrl.Secure(getBiasSummary,                roles.Admin_User_Service))
+	router.GET ("/api/collector/v1/bias-analyses/:id/summary",          ctrl.Secure(getBiasSummary,                roles.Admin_User_Service))
+
+	router.GET   ("/api/collector/v1/bias-analyses/:id/configs",        ctrl.Secure(getBiasConfigsByAnalysisId,    roles.Admin_User_Service))
+	router.POST  ("/api/collector/v1/bias-analyses/:id/configs",        ctrl.Secure(addBiasConfig,                 roles.Admin_User_Service))
+	router.PUT   ("/api/collector/v1/bias-analyses/:id/configs/:id2",   ctrl.Secure(updateBiasConfig,              roles.Admin_User_Service))
+	router.DELETE("/api/collector/v1/bias-analyses/:id/configs/:id2",   ctrl.Secure(deleteBiasConfig,              roles.Admin_User_Service))
 }
 
 //=============================================================================

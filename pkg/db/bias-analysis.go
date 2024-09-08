@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2023 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,13 +31,9 @@ import (
 
 //=============================================================================
 
-func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrument, error) {
-	var list []DataInstrument
-
-	filter := map[string]any{}
-	filter["data_product_id"] = pId
-
-	res := tx.Where(filter).Find(&list)
+func GetBiasAnalyses(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
+	var list []BiasAnalysisFull
+	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
@@ -48,15 +44,15 @@ func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrument, er
 
 //=============================================================================
 
-func GetDataInstrumentsFull(tx *gorm.DB, filter map[string]any) (*[]DataInstrumentFull, error) {
-	var list []DataInstrumentFull
+func GetBiasAnalysesFull(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
+	var list []BiasAnalysisFull
+	query :=
+		"SELECT ba.*, di.symbol as data_symbol, di.name as data_name, bp.symbol as broker_symbol, bp.name as broker_name " +
+		"FROM bias_analysis ba " +
+		"LEFT JOIN data_instrument di on ba.data_instrument_id = di.id " +
+		"LEFT JOIN broker_product bp on ba.broker_product_id = bp.id"
 
-	res := tx.
-		Select("data_instrument.*, dp.symbol as product_symbol, dp.system_code, dp.connection_code").
-		Joins("JOIN data_product dp ON dp.id = data_product_id").
-		Where(filter).
-		Order("name").
-		Find(&list)
+	res := tx.Raw(query).Where(filter).Offset(offset).Limit(limit).Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
@@ -67,8 +63,8 @@ func GetDataInstrumentsFull(tx *gorm.DB, filter map[string]any) (*[]DataInstrume
 
 //=============================================================================
 
-func GetDataInstrumentById(tx *gorm.DB, id uint) (*DataInstrument, error) {
-	var list []DataInstrument
+func GetBiasAnalysisById(tx *gorm.DB, id uint) (*BiasAnalysis, error) {
+	var list []BiasAnalysis
 	res := tx.Find(&list, id)
 
 	if res.Error != nil {
@@ -84,47 +80,51 @@ func GetDataInstrumentById(tx *gorm.DB, id uint) (*DataInstrument, error) {
 
 //=============================================================================
 
-func GetDataInstrumentBySymbol(tx *gorm.DB, productId uint, symbol string) (*DataInstrument, error) {
-	filter := map[string]any{}
-	filter["data_product_id"] = productId
-	filter["symbol"]          = symbol
+func AddBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
+	return tx.Create(ba).Error
+}
 
-	var list []DataInstrument
-	res := tx.Where(filter).Find(&list)
+//=============================================================================
+
+func UpdateBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
+	return tx.Save(ba).Error
+}
+
+//=============================================================================
+//=== Bias configs
+//=============================================================================
+
+func GetBiasConfigsByAnalysisId(tx *gorm.DB, id uint) (*[]BiasConfig, error) {
+	var list []BiasConfig
+
+	filter := map[string]any{}
+	filter["bias_analysis_id"] = id
+
+	res := tx.Where(filter).Order("start_day").Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	if len(list) == 1 {
-		return &list[0], nil
-	}
-
-	return nil, nil
+	return &list, nil
 }
 
 //=============================================================================
 
-func AddDataInstrument(tx *gorm.DB, i *DataInstrument) error {
-	return tx.Create(i).Error
+func AddBiasConfig(tx *gorm.DB, bc *BiasConfig) error {
+	return tx.Create(bc).Error
 }
 
 //=============================================================================
 
-func UpdateDataInstrument(tx *gorm.DB, i *DataInstrument) error {
-	return tx.Save(i).Error
+func UpdateBiasConfig(tx *gorm.DB, bc *BiasConfig) error {
+	return tx.Save(bc).Error
 }
 
 //=============================================================================
 
-func AddUploadJob(tx *gorm.DB, job *UploadJob) error {
-	return tx.Create(job).Error
-}
-
-//=============================================================================
-
-func UpdateUploadJob(tx *gorm.DB, job *UploadJob) error {
-	return tx.Save(job).Error
+func DeleteBiasConfig(tx *gorm.DB, id uint) error {
+	return tx.Delete(&BiasConfig{}, id).Error
 }
 
 //=============================================================================

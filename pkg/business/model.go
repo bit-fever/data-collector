@@ -25,6 +25,7 @@ THE SOFTWARE.
 package business
 
 import (
+	"github.com/bit-fever/data-collector/pkg/core"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"time"
@@ -90,6 +91,12 @@ type DataInstrumentDataResponse struct {
 }
 
 //=============================================================================
+
+type DataInstrumentExt struct {
+	db.DataInstrument
+}
+
+//=============================================================================
 //=== Bias analysis
 //=============================================================================
 
@@ -112,15 +119,10 @@ type BiasAnalysisExt struct {
 //=============================================================================
 
 type BiasSummaryResponse struct {
-	Result  [7]*DataPointDowList `json:"result"`
-}
-
-//-----------------------------------------------------------------------------
-
-func NewBiasSummaryResponse() *BiasSummaryResponse {
-	return &BiasSummaryResponse{
-		Result: [7]*DataPointDowList{},
-	}
+	BiasAnalysis  *db.BiasAnalysis     `json:"biasAnalysis"`
+	BrokerProduct *db.BrokerProduct    `json:"brokerProduct"`
+	Result        [7]*DataPointDowList `json:"result"`
+	config        *ds.DataConfig
 }
 
 //-----------------------------------------------------------------------------
@@ -186,6 +188,61 @@ type DataPointEntry struct {
 	Month int8    `json:"month"`
 	Day   int8    `json:"day"`
 	Delta float64 `json:"delta"`
+}
+
+//=============================================================================
+
+type BiasConfigSpec struct {
+	StartDay        int16    `json:"startDay"`
+	StartSlot       int16    `json:"startSlot"`
+	EndDay          int16    `json:"endDay"`
+	EndSlot         int16    `json:"endSlot"`
+	Months          []bool   `json:"months"`
+	Excludes        []string `json:"excludes"`
+	Operation       int8     `json:"operation"`
+	GrossProfit     float64  `json:"grossProfit"`
+	NetProfit       float64  `json:"netProfit"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (bcs *BiasConfigSpec) ToBiasConfig() *db.BiasConfig {
+	var bc db.BiasConfig
+	bc.StartDay    = bcs.StartDay
+	bc.StartSlot   = bcs.StartSlot
+	bc.EndDay      = bcs.EndDay
+	bc.EndSlot     = bcs.EndSlot
+	bc.Months      = core.EncodeMonths(bcs.Months)
+	bc.Excludes    = core.EncodeExcludes(bcs.Excludes)
+	bc.Operation   = bcs.Operation
+	bc.GrossProfit = bcs.GrossProfit
+	bc.NetProfit   = bcs.NetProfit
+
+	return &bc
+}
+
+//=============================================================================
+
+type BiasConfig struct {
+	BiasConfigSpec
+	Id              uint `json:"id"`
+	BiasAnalysisId  uint `json:"biasAnalysisId"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (bc *BiasConfig) FromBiasConfig(dbc *db.BiasConfig) {
+	bc.Id             = dbc.Id
+	bc.BiasAnalysisId = dbc.BiasAnalysisId
+	bc.StartDay       = dbc.StartDay
+	bc.StartSlot      = dbc.StartSlot
+	bc.EndDay         = dbc.EndDay
+	bc.EndSlot        = dbc.EndSlot
+	bc.Months         = core.DecodeMonths(dbc.Months)
+	bc.Excludes       = core.DecodeExcludes(dbc.Excludes)
+	bc.Operation      = dbc.Operation
+	bc.GrossProfit    = dbc.GrossProfit
+	bc.NetProfit      = dbc.NetProfit
 }
 
 //=============================================================================

@@ -22,88 +22,68 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
+package core
 
-import (
-	"github.com/bit-fever/core/req"
-	"gorm.io/gorm"
-)
+import "strings"
 
 //=============================================================================
+//===
+//=== BiasConfig encoding/decoding
+//===
+//=============================================================================
 
-func GetBiasAnalyses(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
-	var list []BiasAnalysisFull
-	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
+func EncodeMonths(months []bool) int16 {
+	var value int16
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+	if months != nil && len(months) == 12 {
+		for _, month := range months {
+			value <<= 1
+			if month {
+				value |= 1
+			}
+		}
 	}
 
-	return &list, nil
+	return value
 }
 
 //=============================================================================
 
-func GetBiasAnalysesFull(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]BiasAnalysisFull, error) {
-	var list []BiasAnalysisFull
-	query :=
-		"SELECT ba.*, bp.symbol as brokerSymbol, bp.name as brokerName " +
-		"FROM bias_analysis ba " +
-		"LEFT JOIN broker_product bp on ba.broker_product_id = bp.id"
+func EncodeExcludes(list []string) string {
+	var sb strings.Builder
 
-	res := tx.Raw(query).Where(filter).Offset(offset).Limit(limit).Find(&list)
+	if list != nil {
+		for i, exc := range list {
+			if i != 0 {
+				sb.WriteString("|")
+			}
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+			sb.WriteString(exc)
+		}
 	}
 
-	return &list, nil
+	return sb.String()
 }
 
 //=============================================================================
 
-func GetBiasAnalysisById(tx *gorm.DB, id uint) (*BiasAnalysis, error) {
-	var list []BiasAnalysis
-	res := tx.Find(&list, id)
+func DecodeMonths(value int16) []bool {
+	var list []bool
+	var bit int16 = 1<<11
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+	for i:=0; i<12; i++ {
+		month := (value & bit) != 0
+		list = append(list, month)
+		bit >>=1
 	}
 
-	if len(list) == 1 {
-		return &list[0], nil
-	}
-
-	return nil, nil
+	return list
 }
 
 //=============================================================================
 
-func AddBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
-	return tx.Create(ba).Error
-}
-
-//=============================================================================
-
-func UpdateBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
-	return tx.Save(ba).Error
-}
-
-//=============================================================================
-
-func GetBiasConfigsByAnalysisId(tx *gorm.DB, id uint) (*[]BiasConfig, error) {
-	var list []BiasConfig
-
-	filter := map[string]any{}
-	filter["bias_analysis_id"] = id
-
-	res := tx.Where(filter).Order("start_slot").Find(&list)
-
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
-	}
-
-	return &list, nil
+func DecodeExcludes(value string) []string {
+	return strings.Split(value, "|")
 }
 
 //=============================================================================
