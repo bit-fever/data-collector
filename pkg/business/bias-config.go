@@ -37,6 +37,7 @@ func GetBiasConfigsByAnalysisId(tx *gorm.DB, c *auth.Context, baId uint) (*[]*Bi
 	list, err := db.GetBiasConfigsByAnalysisId(tx, baId)
 
 	if err != nil {
+		c.Log.Error("GetBiasConfigsByAnalysisId: Could not retrieve bias configs", "error", err.Error())
 		return nil, err
 	}
 

@@ -258,3 +258,35 @@ func getBiasSummary(c *auth.Context) {
 }
 
 //=============================================================================
+//=== Backtesting
+//=============================================================================
+
+func runBacktest(c *auth.Context) {
+	id, err := c.GetIdFromUrl()
+
+	if err == nil {
+		var bts *business.BiasBacktestSpec
+		err = c.BindParamsFromBody(&bts)
+
+		if err == nil {
+			var bbr *business.BiasBacktestResponse
+
+			err = db.RunInTransaction(func(tx *gorm.DB) error {
+				bbr, err = business.GetBacktestInfo(tx, c, id)
+				return err
+			})
+
+			if err == nil {
+				err = business.RunBacktest(c, bbr)
+				if err == nil {
+					_=c.ReturnObject(bbr)
+					return
+				}
+			}
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================

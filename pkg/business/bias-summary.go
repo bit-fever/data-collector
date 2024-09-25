@@ -34,6 +34,80 @@ import (
 
 //=============================================================================
 
+type BiasSummaryResponse struct {
+	BiasAnalysis  *db.BiasAnalysis     `json:"biasAnalysis"`
+	BrokerProduct *db.BrokerProduct    `json:"brokerProduct"`
+	Result        [7]*DataPointDowList `json:"result"`
+	config        *ds.DataConfig
+}
+
+//-----------------------------------------------------------------------------
+
+func (r *BiasSummaryResponse) Add(dpd *DataPointDelta) {
+	dpdl := r.Result[dpd.Dow]
+	if dpdl == nil {
+		dpdl = &DataPointDowList{
+			Slots: [48]*DataPointSlotList{},
+		}
+
+		r.Result[dpd.Dow] = dpdl
+	}
+
+	dpdl.Add(dpd)
+}
+
+//=============================================================================
+
+type DataPointDowList struct {
+	Slots [48]*DataPointSlotList `json:"slots"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (l *DataPointDowList) Add(dpd *DataPointDelta) {
+	slot := (dpd.Hour * 60 + dpd.Min) / 30
+	dpsl := l.Slots[slot]
+	if dpsl == nil {
+		dpsl = &DataPointSlotList{
+			List: []*DataPointEntry{},
+		}
+
+		l.Slots[slot] = dpsl
+	}
+
+	l.Slots[slot].Add(dpd)
+}
+
+//=============================================================================
+
+type DataPointSlotList struct {
+	List []*DataPointEntry `json:"list"`
+}
+
+//-----------------------------------------------------------------------------
+
+func (l *DataPointSlotList) Add(dpd *DataPointDelta) {
+	dpe := &DataPointEntry{
+		Year : int16(dpd.Year),
+		Month: int8(dpd.Month),
+		Day  : int8(dpd.Day),
+		Delta: dpd.Delta,
+	}
+
+	l.List = append(l.List, dpe)
+}
+
+//=============================================================================
+
+type DataPointEntry struct {
+	Year  int16   `json:"year"`
+	Month int8    `json:"month"`
+	Day   int8    `json:"day"`
+	Delta float64 `json:"delta"`
+}
+
+//=============================================================================
+
 func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResponse, error) {
 	c.Log.Info("GetBiasSummary: Getting bias analysis", "id", id)
 
@@ -51,6 +125,7 @@ func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResp
 	var bp *db.BrokerProduct
 	bp, err = db.GetBrokerProductById(tx, ba.BrokerProductId)
 	if err != nil {
+		c.Log.Error("GetBiasSummaryInfo: Could not retrieve broker product", "error", err.Error())
 		return nil, err
 	}
 

@@ -242,6 +242,10 @@ func parseReduction(value string) (int, error) {
 		return 0, err
 	}
 
+	if red == 0 {
+		return red, nil
+	}
+
 	if red < 100 || red > 100000 {
 		return 0, errors.New("allowed range is 100..100000")
 	}

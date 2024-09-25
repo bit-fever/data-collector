@@ -73,10 +73,10 @@ func GetBiasAnalysisById(tx *gorm.DB, c *auth.Context, id uint, details bool) (*
 
 	//--- Add instruments, if it is the case
 
-	var configs *[]db.BiasConfig
+	var configs *[]*BiasConfig
 
 	if details {
-		configs, err = db.GetBiasConfigsByAnalysisId(tx, ba.Id)
+		configs, err = GetBiasConfigsByAnalysisId(tx, c, ba.Id)
 	}
 
 	//--- Put all together
