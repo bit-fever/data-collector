@@ -25,9 +25,11 @@ THE SOFTWARE.
 package business
 
 import (
+	"errors"
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
+	"github.com/bit-fever/sick-engine/session"
 	"gorm.io/gorm"
 	"time"
 )
@@ -39,7 +41,9 @@ import (
 //=============================================================================
 
 type BiasBacktestSpec struct {
-
+	StopLoss   float64                  `json:"stopLoss"`
+	TakeProfit float64                  `json:"takeProfit"`
+	Session    *session.TradingSession  `json:"session"`
 }
 
 //=============================================================================
@@ -47,6 +51,7 @@ type BiasBacktestSpec struct {
 type BiasBacktestResponse struct {
 	BiasAnalysis      *db.BiasAnalysis     `json:"biasAnalysis"`
 	BrokerProduct     *db.BrokerProduct    `json:"brokerProduct"`
+	Spec              *BiasBacktestSpec    `json:"spec"`
 	BacktestedConfigs []*BacktestedConfig  `json:"backtestedConfigs"`
 	config            *ds.DataConfig
 }
@@ -57,7 +62,7 @@ type BiasBacktestResponse struct {
 //===
 //=============================================================================
 
-func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasBacktestResponse, error) {
+func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, bts *BiasBacktestSpec) (*BiasBacktestResponse, error) {
 	c.Log.Info("GetBacktestInfo: Getting bias analysis and configs for backtest", "id", id)
 
 	ba, err := getBiasAnalysisAndCheckAccess(tx, c, id, "GetBacktestInfo")
@@ -97,9 +102,15 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasBacktestRespon
 		btConfigs = append(btConfigs, btc)
 	}
 
+	err = checkSpec(c, bts)
+	if err != nil {
+		return nil,err
+	}
+
 	return &BiasBacktestResponse{
 		BiasAnalysis     : ba,
 		BrokerProduct    : bp,
+		Spec             : bts,
 		BacktestedConfigs: btConfigs,
 		config           : config,
 	}, nil
@@ -145,6 +156,26 @@ func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 //===
 //=== Private functions
 //===
+//=============================================================================
+
+func checkSpec(c *auth.Context, bts *BiasBacktestSpec) error {
+	var err error
+
+	if bts.StopLoss < 0 {
+		err = errors.New("stopLoss cannot be negative")
+		c.Log.Error("createParams: Invalid stopLoss", "error", err.Error())
+		return err
+	}
+
+	if bts.TakeProfit < 0 {
+		err = errors.New("takeProfit cannot be negative")
+		c.Log.Error("createParams: Invalid takeProfit", "error", err.Error())
+		return err
+	}
+
+	return nil
+}
+
 //=============================================================================
 
 func calcTimeInfo(dp *ds.DataPoint) *TimeInfo {
