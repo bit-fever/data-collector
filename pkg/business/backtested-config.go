@@ -25,87 +25,16 @@ THE SOFTWARE.
 package business
 
 import (
+	"github.com/bit-fever/data-collector/pkg/core"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
+	"math"
 	"time"
 )
 
 //=============================================================================
 
 const SlotNum int = 48*5
-
-//=============================================================================
-//===
-//=== TimeInfo
-//===
-//=============================================================================
-
-type TimeInfo struct {
-	dayOfWeek  int16
-	slot       int16
-	month      int16
-	year       int16
-}
-
-//=============================================================================
-//===
-//=== BiasTrade
-//===
-//=============================================================================
-
-type BiasTrade struct {
-	EntryTime     time.Time `json:"entryTime"`
-	EntryValue    float64   `json:"entryValue"`
-	ExitTime      time.Time `json:"exitTime"`
-	ExitValue     float64   `json:"exitValue"`
-	Operation     int8      `json:"operation"`
-	GrossProfit   float64   `json:"grossProfit"`
-	NetProfit     float64   `json:"netProfit"`
-}
-
-//=============================================================================
-
-func (bt *BiasTrade) Close(dp *ds.DataPoint, bp *db.BrokerProduct) {
-	bt.ExitTime   = dp.Time
-	bt.ExitValue  = dp.Close
-	bt.GrossProfit = (bt.ExitValue - bt.EntryValue) * float64(bp.PointValue)
-
-	if bt.Operation == 1 {
-		bt.GrossProfit *= -1
-	}
-
-	//--- We have 2 trades: 1 to enter and 1 to exit the market
-	bt.NetProfit = bt.GrossProfit - 2 * float64(bp.CostPerTrade)
-}
-
-//=============================================================================
-//===
-//=== TriggeringSequence
-//===
-//=============================================================================
-
-type TriggeringSequence struct {
-	DataPoints []*ds.DataPoint
-}
-
-//=============================================================================
-
-func NewTriggeringSequence(index int, dataPoints []*ds.DataPoint, slotNum int) *TriggeringSequence {
-	i := index - slotNum
-	if i <0 {
-		return nil
-	}
-
-	var points []*ds.DataPoint
-
-	for ; i<index; i++ {
-		points = append(points, dataPoints[i])
-	}
-
-	return &TriggeringSequence{
-		DataPoints: points,
-	}
-}
 
 //=============================================================================
 //===
@@ -121,17 +50,22 @@ type BacktestedConfig struct {
 	NetAvgTrade   float64               `json:"netAvgTrade"`
 	Trades        []*BiasTrade          `json:"biasTrades"`
 	Sequences     []*TriggeringSequence `json:"sequences"`
+	Equity        *Equity               `json:"equity"`
+	ProfitDistrib *ProfitDistribution   `json:"profitDistrib"`
 
 	//------------------------
 
 	currTrade     *BiasTrade
 	excludedSet   *ExcludedSet
 	brokerProduct *db.BrokerProduct
+	spec          *BiasBacktestSpec
 }
 
 //=============================================================================
+//=== Constructor
+//=============================================================================
 
-func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct) (*BacktestedConfig, error) {
+func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct, spec *BiasBacktestSpec) (*BacktestedConfig, error) {
 	es, err := NewExcludedSet(bc.Excludes)
 
 	return &BacktestedConfig{
@@ -140,7 +74,38 @@ func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct) (*BacktestedConfi
 		Sequences    : []*TriggeringSequence{},
 		excludedSet  : es,
 		brokerProduct: bp,
+		spec         : spec,
 	}, err
+}
+
+//=============================================================================
+//=== Methods
+//=============================================================================
+
+func (btc *BacktestedConfig) RunBacktest(ti *TimeInfo, currDp *ds.DataPoint, prevDp *ds.DataPoint, i int, dataPoints []*ds.DataPoint) {
+	if btc.currTrade == nil {
+		//--- Check if we can start a new trade
+
+		if btc.IsDayAllowed(ti) {
+			if btc.IsStartOfTrade(ti) {
+				btc.StartTrade(currDp, prevDp, i, dataPoints)
+			}
+		}
+	}
+
+	//--- The previous block of code could have started a new 1-slot trade
+
+	if btc.currTrade != nil {
+		//--- Check if we need to exit from current trade
+
+		if btc.IsEndOfTrade(ti) {
+			btc.EndTrade(currDp, ExitConditionNormal)
+		} else if btc.currTrade.IsInStopLoss(currDp) {
+			btc.EndTrade(currDp, ExitConditionStop)
+		} else if btc.currTrade.IsInProfit(currDp) {
+			btc.EndTrade(currDp, ExitConditionProfit)
+		}
+	}
 }
 
 //=============================================================================
@@ -165,17 +130,13 @@ func (btc *BacktestedConfig) IsEndOfTrade(ti *TimeInfo) bool {
 
 func (btc *BacktestedConfig) StartTrade(currDp, prevDp *ds.DataPoint, index int, dataPoints []*ds.DataPoint) {
 	btc.Sequences = append(btc.Sequences, NewTriggeringSequence(index, dataPoints, SlotNum))
-	btc.currTrade = &BiasTrade{
-		EntryTime : currDp.Time.Add(-time.Minute * 30),
-		EntryValue: prevDp.Close,
-		Operation: btc.BiasConfig.Operation,
-	}
+	btc.currTrade = NewBiasTrade(currDp, prevDp, btc)
 }
 
 //=============================================================================
 
-func (btc *BacktestedConfig) EndTrade(currDp *ds.DataPoint) {
-	btc.currTrade.Close(currDp, btc.brokerProduct)
+func (btc *BacktestedConfig) EndTrade(currDp *ds.DataPoint, exitCondition int8) {
+	btc.currTrade.Close(currDp, btc.brokerProduct, exitCondition)
 
 	btc.GrossProfit += btc.currTrade.GrossProfit
 	btc.NetProfit   += btc.currTrade.NetProfit
@@ -190,9 +151,179 @@ func (btc *BacktestedConfig) Finish() {
 	numTrades := len(btc.Trades)
 
 	if numTrades > 0 {
-		btc.GrossAvgTrade = btc.GrossProfit / float64(numTrades)
-		btc.NetAvgTrade   = btc.NetProfit   / float64(numTrades)
+		btc.GrossAvgTrade = core.Trunc2d(btc.GrossProfit / float64(numTrades))
+		btc.NetAvgTrade   = core.Trunc2d(btc.NetProfit   / float64(numTrades))
 	}
+
+	btc.GrossProfit = math.Trunc(btc.GrossProfit)
+	btc.NetProfit   = math.Trunc(btc.NetProfit)
+
+	btc.Equity        = NewEquity(btc.Trades)
+	btc.ProfitDistrib = NewProfitDistribution(btc.Trades, float64(btc.brokerProduct.CostPerTrade))
+}
+
+//=============================================================================
+//===
+//=== TimeInfo
+//===
+//=============================================================================
+
+type TimeInfo struct {
+	dayOfWeek  int16
+	slot       int16
+	month      int16
+	year       int16
+}
+
+//=============================================================================
+//===
+//=== TriggeringSequence
+//===
+//=============================================================================
+
+type TriggeringSequence struct {
+	DataPoints []*ds.DataPoint
+}
+
+//=============================================================================
+
+func NewTriggeringSequence(index int, dataPoints []*ds.DataPoint, slotNum int) *TriggeringSequence {
+	i := index - slotNum
+	if i <0 {
+		return nil
+	}
+
+	//index--
+
+	var points []*ds.DataPoint
+
+	for ; i<index; i++ {
+		points = append(points, dataPoints[i])
+	}
+
+	return &TriggeringSequence{
+		DataPoints: points,
+	}
+}
+
+//=============================================================================
+//===
+//=== Equity
+//===
+//=============================================================================
+
+type Equity struct {
+	Time  []time.Time `json:"time"`
+	Gross []float64   `json:"gross"`
+	Net   []float64   `json:"net"`
+}
+
+//=============================================================================
+
+func NewEquity(trades []*BiasTrade) *Equity {
+	var timeArray   []time.Time
+	var grossEquity []float64
+	var netEquity   []float64
+
+	var grossPrev float64 = 0
+	var netPrev   float64 = 0
+
+	for _, bt := range trades {
+		timeArray = append(timeArray, bt.ExitTime)
+
+		grossEquity = append(grossEquity, grossPrev + bt.GrossProfit)
+		netEquity   = append(netEquity,   netPrev   + bt.NetProfit)
+
+		grossPrev = grossPrev + bt.GrossProfit
+		netPrev   = netPrev   + bt.NetProfit
+	}
+
+	//--- Truncate decimal digits on profits
+
+	for i, _ := range timeArray {
+		grossEquity[i] = math.Trunc(grossEquity[i])
+		netEquity[i]   = math.Trunc(netEquity  [i])
+	}
+
+	return &Equity{
+		Time : timeArray,
+		Gross: grossEquity,
+		Net  : netEquity,
+	}
+}
+
+//=============================================================================
+//===
+//=== ProfitDistribution
+//===
+//=============================================================================
+
+type ProfitDistribution struct {
+	NetProfits [16]float64 `json:"netProfits"`
+	NumTrades  [16]int     `json:"numTrades"`
+	AvgTrades  [16]float64 `json:"avgTrades"`
+}
+
+//=============================================================================
+
+func NewProfitDistribution(trades []*BiasTrade, costPerTrade float64) *ProfitDistribution {
+	var netProfits[16]float64
+	var numTrades [16]int
+	var avgTrades [16]float64
+
+	threshold := calcThreshold(costPerTrade)
+
+	for _, bt := range trades {
+		found := false
+
+		for i:=0; i<15; i++ {
+			if bt.NetProfit < threshold[i] {
+				netProfits[i] += bt.NetProfit
+				numTrades [i] += 1
+				found = true
+				break
+			}
+		}
+
+		if ! found {
+			netProfits[15] += bt.NetProfit
+			numTrades [15] += 1
+		}
+	}
+
+	//---trunc profits and calc avgTrade to 2 decimal digits
+
+	for i:=0; i<16; i++ {
+		if numTrades[i] != 0 {
+			avgTrades[i] = core.Trunc2d(netProfits[i] / float64(numTrades[i]))
+		}
+
+		netProfits[i] = math.Round(netProfits[i])
+	}
+
+	return &ProfitDistribution{
+		NetProfits: netProfits,
+		NumTrades : numTrades,
+		AvgTrades : avgTrades,
+	}
+}
+
+//=============================================================================
+
+func calcThreshold(costPerTrade float64) []float64 {
+	var threshold []float64
+
+	for i:=6; i>=0; i-- {
+		threshold = append(threshold, -math.Pow(2, float64(i)) * costPerTrade)
+	}
+
+	threshold = append(threshold, 0)
+
+	for i:=0; i<=6; i++ {
+		threshold = append(threshold, math.Pow(2, float64(i)) * costPerTrade)
+	}
+
+	return threshold
 }
 
 //=============================================================================

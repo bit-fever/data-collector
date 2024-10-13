@@ -24,7 +24,9 @@ THE SOFTWARE.
 
 package core
 
-import "strings"
+import (
+	"strings"
+)
 
 //=============================================================================
 //===
@@ -83,7 +85,17 @@ func DecodeMonths(value int16) []bool {
 //=============================================================================
 
 func DecodeExcludes(value string) []string {
+	if len(value) == 0 {
+		return []string{}
+	}
+
 	return strings.Split(value, "|")
+}
+
+//=============================================================================
+
+func Trunc2d(value float64) float64 {
+	return float64(int(value * 100)) / 100
 }
 
 //=============================================================================

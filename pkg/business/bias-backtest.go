@@ -62,7 +62,7 @@ type BiasBacktestResponse struct {
 //===
 //=============================================================================
 
-func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, bts *BiasBacktestSpec) (*BiasBacktestResponse, error) {
+func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, spec *BiasBacktestSpec) (*BiasBacktestResponse, error) {
 	c.Log.Info("GetBacktestInfo: Getting bias analysis and configs for backtest", "id", id)
 
 	ba, err := getBiasAnalysisAndCheckAccess(tx, c, id, "GetBacktestInfo")
@@ -93,7 +93,7 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, bts *BiasBacktestSpe
 	var btConfigs []*BacktestedConfig
 
 	for _, bc := range *biasConfigs {
-		btc, err := NewBacktestedConfig(bc, bp)
+		btc, err := NewBacktestedConfig(bc, bp, spec)
 		if err != nil {
 			c.Log.Error("GetBacktestInfo: Could not build backtested config", "error", err.Error())
 			return nil, err
@@ -102,7 +102,7 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, bts *BiasBacktestSpe
 		btConfigs = append(btConfigs, btc)
 	}
 
-	err = checkSpec(c, bts)
+	err = checkSpec(c, spec)
 	if err != nil {
 		return nil,err
 	}
@@ -110,7 +110,7 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, bts *BiasBacktestSpe
 	return &BiasBacktestResponse{
 		BiasAnalysis     : ba,
 		BrokerProduct    : bp,
-		Spec             : bts,
+		Spec             : spec,
 		BacktestedConfigs: btConfigs,
 		config           : config,
 	}, nil
@@ -140,7 +140,7 @@ func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 			ti     := calcTimeInfo(dp)
 
 			for _, btc := range bbr.BacktestedConfigs {
-				runBacktest(btc, ti, dp, prevDp, i, dataPoints)
+				btc.RunBacktest(ti, dp, prevDp, i, dataPoints)
 			}
 		}
 	}
@@ -194,30 +194,6 @@ func calcTimeInfo(dp *ds.DataPoint) *TimeInfo {
 		slot     : int16(slot),
 		month    : int16(month),
 		year     : int16(year),
-	}
-}
-
-//=============================================================================
-
-func runBacktest(btc *BacktestedConfig, ti *TimeInfo, currDp *ds.DataPoint, prevDp *ds.DataPoint, i int, dataPoints []*ds.DataPoint) {
-	if btc.currTrade == nil {
-		//--- Check if we can start a new trade
-
-		if btc.IsDayAllowed(ti) {
-			if btc.IsStartOfTrade(ti) {
-				btc.StartTrade(currDp, prevDp, i, dataPoints)
-			}
-		}
-	}
-
-	//--- The previous block of code could have started a new 1-slot trade
-
-	if btc.currTrade != nil {
-		//--- Check if we need to exit from current trade
-
-		if btc.IsEndOfTrade(ti) {
-			btc.EndTrade(currDp)
-		}
 	}
 }
 
