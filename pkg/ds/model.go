@@ -34,12 +34,13 @@ import (
 //=============================================================================
 
 type DataPoint struct {
-	Time   time.Time `json:"time"`
-	Open   float64   `json:"open"`
-	High   float64   `json:"high"`
-	Low    float64   `json:"low"`
-	Close  float64   `json:"close"`
-	Volume int       `json:"volume"`
+	Time       time.Time `json:"time"`
+	Open       float64   `json:"open"`
+	High       float64   `json:"high"`
+	Low        float64   `json:"low"`
+	Close      float64   `json:"close"`
+	UpVolume   int       `json:"upVolume"`
+	DownVolume int       `json:"downVolume"`
 }
 
 //=============================================================================
@@ -56,7 +57,9 @@ func (dp *DataPoint) String() string {
 	sb.WriteString(",")
 	sb.WriteString(fmt.Sprintf("%f", dp.Close))
 	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.Volume))
+	sb.WriteString(strconv.Itoa(dp.UpVolume))
+	sb.WriteString(",")
+	sb.WriteString(strconv.Itoa(dp.DownVolume))
 
 	return sb.String()
 }

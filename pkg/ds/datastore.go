@@ -126,7 +126,7 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 
 	for rows.Next() {
 		var dp DataPoint
-		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.Volume)
+		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.UpVolume, &dp.DownVolume)
 
 		if err != nil {
 			return err
@@ -157,7 +157,7 @@ func SetDataPoints(points []*DataPoint, config *DataConfig) error {
 
 	for i := range points {
 		dp := points[i]
-		batch.Queue(query, dp.Time, config.Symbol, config.Selector, dp.Open, dp.High, dp.Low, dp.Close, dp.Volume)
+		batch.Queue(query, dp.Time, config.Symbol, config.Selector, dp.Open, dp.High, dp.Low, dp.Close, dp.UpVolume, dp.DownVolume)
 	}
 
 	br := pool.SendBatch(context.Background(), batch)
@@ -184,7 +184,7 @@ func buildGetQuery(config *DataConfig) string {
 
 	table = table + config.Timeframe
 
-	query := 	"SELECT time, open, high, low, close, volume FROM "+ table +" "+
+	query := 	"SELECT time, open, high, low, close, up_volume, down_volume FROM "+ table +" "+
 				"WHERE symbol = $1 AND "+ field +" = $2 AND time >= $3 AND time <= $4 "+
 				"ORDER BY time"
 
@@ -204,14 +204,15 @@ func buildAddQuery(config *DataConfig) string {
 
 	table = table + config.Timeframe
 
-	query := 	"INSERT INTO "+ table +"(time, symbol, "+ field +", open, high, low, close, volume) " +
-				"VALUES($1, $2, $3, $4, $5, $6, $7, $8) " +
+	query := 	"INSERT INTO "+ table +"(time, symbol, "+ field +", open, high, low, close, up_volume, down_volume) " +
+				"VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) " +
 				"ON CONFLICT(time, symbol, "+ field +") DO UPDATE SET "+
 				"open=excluded.open,"+
 				"high=excluded.high,"+
 				"low=excluded.low,"+
 				"close=excluded.close,"+
-				"volume=excluded.volume"
+				"up_volume=excluded.up_volume,"+
+				"down_volume=excluded.down_volume"
 
 	return query
 }

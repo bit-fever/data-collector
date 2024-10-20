@@ -159,7 +159,7 @@ func (btc *BacktestedConfig) Finish() {
 	btc.NetProfit   = math.Trunc(btc.NetProfit)
 
 	btc.Equity        = NewEquity(btc.Trades)
-	btc.ProfitDistrib = NewProfitDistribution(btc.Trades, float64(btc.brokerProduct.CostPerTrade))
+	btc.ProfitDistrib = NewProfitDistribution(btc.Trades, float64(btc.brokerProduct.CostPerOperation))
 }
 
 //=============================================================================
@@ -266,12 +266,12 @@ type ProfitDistribution struct {
 
 //=============================================================================
 
-func NewProfitDistribution(trades []*BiasTrade, costPerTrade float64) *ProfitDistribution {
+func NewProfitDistribution(trades []*BiasTrade, costPerOperation float64) *ProfitDistribution {
 	var netProfits[16]float64
 	var numTrades [16]int
 	var avgTrades [16]float64
 
-	threshold := calcThreshold(costPerTrade)
+	threshold := calcThreshold(costPerOperation)
 
 	for _, bt := range trades {
 		found := false
@@ -310,17 +310,17 @@ func NewProfitDistribution(trades []*BiasTrade, costPerTrade float64) *ProfitDis
 
 //=============================================================================
 
-func calcThreshold(costPerTrade float64) []float64 {
+func calcThreshold(costPerOperation float64) []float64 {
 	var threshold []float64
 
 	for i:=6; i>=0; i-- {
-		threshold = append(threshold, -math.Pow(2, float64(i)) * costPerTrade)
+		threshold = append(threshold, -math.Pow(2, float64(i)) * costPerOperation)
 	}
 
 	threshold = append(threshold, 0)
 
 	for i:=0; i<=6; i++ {
-		threshold = append(threshold, math.Pow(2, float64(i)) * costPerTrade)
+		threshold = append(threshold, math.Pow(2, float64(i)) * costPerOperation)
 	}
 
 	return threshold

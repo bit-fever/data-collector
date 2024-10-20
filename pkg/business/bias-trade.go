@@ -152,7 +152,7 @@ func (bt *BiasTrade) Close(dp *ds.DataPoint, bp *db.BrokerProduct, exitCondition
 	}
 
 	//--- We have 2 trades: 1 to enter and 1 to exit the market
-	bt.NetProfit   = core.Trunc2d(bt.GrossProfit - 2 * float64(bp.CostPerTrade))
+	bt.NetProfit   = core.Trunc2d(bt.GrossProfit - 2 * float64(bp.CostPerOperation))
 	bt.GrossProfit = core.Trunc2d(bt.GrossProfit)
 }
 

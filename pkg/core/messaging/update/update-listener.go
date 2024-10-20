@@ -105,13 +105,13 @@ func setBrokerProduct(bpm *BrokerProductMessage) bool {
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
 		bp := &db.BrokerProduct{}
 
-		bp.Id           = bpm.BrokerProduct.Id
-		bp.Symbol       = bpm.BrokerProduct.Symbol
-		bp.Username     = bpm.BrokerProduct.Username
-		bp.Name         = bpm.BrokerProduct.Name
-		bp.PointValue   = bpm.BrokerProduct.PointValue
-		bp.CostPerTrade = bpm.BrokerProduct.CostPerTrade
-		bp.CurrencyCode = bpm.Currency.Code
+		bp.Id               = bpm.BrokerProduct.Id
+		bp.Symbol           = bpm.BrokerProduct.Symbol
+		bp.Username         = bpm.BrokerProduct.Username
+		bp.Name             = bpm.BrokerProduct.Name
+		bp.PointValue       = bpm.BrokerProduct.PointValue
+		bp.CostPerOperation = bpm.BrokerProduct.CostPerOperation
+		bp.CurrencyCode     = bpm.Currency.Code
 
 		return db.UpdateBrokerProduct(tx, bp)
 	})

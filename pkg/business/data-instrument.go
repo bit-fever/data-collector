@@ -270,10 +270,11 @@ func reduceDataPoints(dataPoints []*ds.DataPoint, reduction int) ([]*ds.DataPoin
 		if currDp == nil {
 			currDp = dp
 		} else {
-			currDp.High    = math.Max(currDp.High, dp.High)
-			currDp.Low     = math.Min(currDp.Low,  dp.Low)
-			currDp.Close   = dp.Close
-			currDp.Volume += dp.Volume
+			currDp.High        = math.Max(currDp.High, dp.High)
+			currDp.Low         = math.Min(currDp.Low,  dp.Low)
+			currDp.Close       = dp.Close
+			currDp.UpVolume   += dp.UpVolume
+			currDp.DownVolume += dp.DownVolume
 		}
 
 		count++

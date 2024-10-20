@@ -175,7 +175,8 @@ func (p *TradestationParser) createDataPoint(values []string, loc *time.Location
 						if err == nil {
 							down,err = parseInt(values[p.indexDown], Down)
 							if err == nil {
-								dp.Volume = up + down
+								dp.UpVolume   = up
+								dp.DownVolume = down
 								dp.Time = dp.Time.In(time.UTC)
 							}
 						}
