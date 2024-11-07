@@ -36,36 +36,34 @@ import (
 
 func HandleUpdateMessage(m *msg.Message) bool {
 
-	slog.Info("New message received", "origin", m.Origin, "type", m.Type, "source", m.Source)
+	slog.Info("New message received", "source", m.Source,  "type", m.Type)
 
-	if m.Origin == msg.OriginDb {
-		if m.Source == msg.SourceDataProduct {
-			dpm := DataProductMessage{}
-			err := json.Unmarshal(m.Entity, &dpm)
-			if err != nil {
-				slog.Error("Dropping badly data formatted message (DataProduct)!", "entity", string(m.Entity))
-				return true
-			}
+	if m.Source == msg.SourceDataProduct {
+		dpm := DataProductMessage{}
+		err := json.Unmarshal(m.Entity, &dpm)
+		if err != nil {
+			slog.Error("Dropping badly data formatted message (DataProduct)!", "entity", string(m.Entity))
+			return true
+		}
 
-			if m.Type == msg.TypeCreate {
-				return addDataProduct(&dpm)
-			}
+		if m.Type == msg.TypeCreate {
+			return addDataProduct(&dpm)
+		}
 
-		} else if m.Source == msg.SourceBrokerProduct {
-			bpm := BrokerProductMessage{}
-			err := json.Unmarshal(m.Entity, &bpm)
-			if err != nil {
-				slog.Error("Dropping badly formatted message (BrokerProduct)!", "entity", string(m.Entity))
-				return true
-			}
+	} else if m.Source == msg.SourceBrokerProduct {
+		bpm := BrokerProductMessage{}
+		err := json.Unmarshal(m.Entity, &bpm)
+		if err != nil {
+			slog.Error("Dropping badly formatted message (BrokerProduct)!", "entity", string(m.Entity))
+			return true
+		}
 
-			if m.Type == msg.TypeCreate || m.Type == msg.TypeUpdate {
-				return setBrokerProduct(&bpm)
-			}
+		if m.Type == msg.TypeCreate || m.Type == msg.TypeUpdate {
+			return setBrokerProduct(&bpm)
 		}
 	}
 
-	slog.Error("Dropping message with unknown origin/type!", "origin", m.Origin, "type", m.Type)
+	slog.Error("Dropping message with unknown source/type!", "source", m.Source, "type", m.Type)
 	return true
 }
 

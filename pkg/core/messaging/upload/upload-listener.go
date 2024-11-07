@@ -39,24 +39,22 @@ import (
 
 func HandleUploadMessage(m *msg.Message) bool {
 
-	slog.Info("New upload message received", "origin", m.Origin, "type", m.Type, "source", m.Source)
+	slog.Info("New upload message received", "source", m.Source, "type", m.Type)
 
-	if m.Origin == msg.OriginDb {
-		if m.Source == msg.SourceUploadJob {
-			job := db.UploadJob{}
-			err := json.Unmarshal(m.Entity, &job)
-			if err != nil {
-				slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
-				return true
-			}
+	if m.Source == msg.SourceUploadJob {
+		job := db.UploadJob{}
+		err := json.Unmarshal(m.Entity, &job)
+		if err != nil {
+			slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
+			return true
+		}
 
-			if m.Type == msg.TypeCreate {
-				return uploadFile(&job)
-			}
+		if m.Type == msg.TypeCreate {
+			return uploadFile(&job)
 		}
 	}
 
-	slog.Error("Dropping message with unknown origin/type!", "origin", m.Origin, "type", m.Type)
+	slog.Error("Dropping message with unknown source/type!", "source", m.Source, "type", m.Type)
 	return true
 }
 

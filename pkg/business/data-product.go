@@ -134,7 +134,7 @@ func getDataProductAndCheckAccess(tx *gorm.DB, c *auth.Context, id uint, functio
 //=============================================================================
 
 func sendIngestJobMessage(c *auth.Context, job *db.UploadJob) error {
-	err := msg.SendMessage(msg.ExCollectorUpload, msg.OriginDb, msg.TypeCreate, msg.SourceUploadJob, job)
+	err := msg.SendMessage(msg.ExCollector, msg.SourceUploadJob, msg.TypeCreate, job)
 
 	if err != nil {
 		c.Log.Error("sendIngestJobMessage: Could not publish the upload message", "error", err.Error())

@@ -36,8 +36,8 @@ import (
 func InitMessageListener() {
 	slog.Info("Starting message listeners...")
 
-	go msg.ReceiveMessages(msg.QuInventoryUpdatesToCollector, update.HandleUpdateMessage)
-	go msg.ReceiveMessages(msg.QuCollectorUploadToIngester,   upload.HandleUploadMessage)
+	go msg.ReceiveMessages(msg.QuInventoryToCollector, update.HandleUpdateMessage)
+	go msg.ReceiveMessages(msg.QuCollectorToIngester,  upload.HandleUploadMessage)
 }
 
 //=============================================================================
