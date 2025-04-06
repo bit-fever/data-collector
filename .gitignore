@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+config/*.crt
+config/*.key
+log/*.log
+staging/*
+*.iml
