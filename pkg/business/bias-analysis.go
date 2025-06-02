@@ -134,6 +134,24 @@ func UpdateBiasAnalysis(tx *gorm.DB, c *auth.Context, id uint, bas *BiasAnalysis
 }
 
 //=============================================================================
+
+func DeleteBiasAnalysis(tx *gorm.DB, c *auth.Context, id uint) (*db.BiasAnalysis, error) {
+	c.Log.Info("DeleteBiasAnalysis: Deleting a bias analysis", "id", id)
+
+	ba, err := getBiasAnalysisAndCheckAccess(tx, c, id, "DeleteBiasAnalysis")
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.DeleteBiasAnalysis(tx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return ba, nil
+}
+
+//=============================================================================
 //===
 //=== Private functions
 //===

@@ -91,6 +91,12 @@ func UpdateBiasAnalysis(tx *gorm.DB, ba *BiasAnalysis) error {
 }
 
 //=============================================================================
+
+func DeleteBiasAnalysis(tx *gorm.DB, id uint) error {
+	return tx.Delete(&BiasAnalysis{}, id).Error
+}
+
+//=============================================================================
 //=== Bias configs
 //=============================================================================
 

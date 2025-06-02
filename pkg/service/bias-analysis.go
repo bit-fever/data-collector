@@ -129,6 +129,26 @@ func updateBiasAnalysis(c *auth.Context) {
 }
 
 //=============================================================================
+
+func deleteBiasAnalysis(c *auth.Context) {
+	id, err := c.GetIdFromUrl()
+
+	if err == nil {
+		err = db.RunInTransaction(func(tx *gorm.DB) error {
+			ba, err := business.DeleteBiasAnalysis(tx, c, id)
+
+			if err != nil {
+				return err
+			}
+
+			return c.ReturnObject(&ba)
+		})
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
 //=== BiasConfig
 //=============================================================================
 
