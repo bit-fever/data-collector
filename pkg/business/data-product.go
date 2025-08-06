@@ -59,7 +59,7 @@ func AddDataInstrumentAndJob(tx *gorm.DB, c *auth.Context, productId uint, spec 
 			DataProductId: p.Id,
 			Symbol       : spec.Symbol,
 			Name         : spec.Name,
-			IsContinuous : spec.Continuous,
+			Continuous   : spec.Continuous,
 			Status       : db.InstrumentStatusProcessing,
 		}
 
@@ -68,9 +68,9 @@ func AddDataInstrumentAndJob(tx *gorm.DB, c *auth.Context, productId uint, spec 
 			return err
 		}
 	} else {
-		i.Name         = spec.Name
-		i.IsContinuous = spec.Continuous
-		i.Status       = db.InstrumentStatusProcessing
+		i.Name       = spec.Name
+		i.Continuous = spec.Continuous
+		i.Status     = db.InstrumentStatusProcessing
 
 		err = db.UpdateDataInstrument(tx, i)
 		if err != nil {

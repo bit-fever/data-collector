@@ -47,6 +47,7 @@ type DataProduct struct {
 	SystemCode           string  `json:"systemCode"`
 	ConnectionCode       string  `json:"connectionCode"`
 	SupportsMultipleData bool    `json:"supportsMultipleData"`
+	Connected            bool    `json:"connected"`
 	Timezone             string  `json:"timezone"`
 }
 
@@ -62,7 +63,7 @@ type DataInstrument struct {
 	Symbol           string  `json:"symbol"`
 	Name             string  `json:"name"`
 	ExpirationDate   int     `json:"expirationDate,omitempty"`
-	IsContinuous     bool    `json:"isContinuous"`
+	Continuous       bool    `json:"continuous"`
 	Status           int8    `json:"status"`
 	DataFrom         int     `json:"dataFrom"`
 	DataTo           int     `json:"dataTo"`

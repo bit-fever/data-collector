@@ -190,7 +190,7 @@ func updateLoadedPeriod(tx *gorm.DB, i *db.DataInstrument, dr *DataRange) error 
 		i.DataTo = dr.ToDay
 	}
 
-	if !i.IsContinuous {
+	if !i.Continuous {
 		i.ExpirationDate = i.DataTo
 	}
 	return db.UpdateDataInstrument(tx, i)

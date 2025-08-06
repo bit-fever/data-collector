@@ -59,3 +59,19 @@ func UpdateDataProduct(tx *gorm.DB, p *DataProduct) error {
 }
 
 //=============================================================================
+
+func DisconnectAll(tx *gorm.DB) error {
+	return tx.Model(&DataProduct{}).
+		Where("supports_multiple_data = false").
+		Update("connected", false).Error
+}
+
+//=============================================================================
+
+func SetConnectionStatus(tx *gorm.DB, user, code string, flag bool) error {
+	return tx.Model(&DataProduct{}).
+		Where("username = ? AND connection_code = ?", user, code).
+		Update("connected", flag).Error
+}
+
+//=============================================================================

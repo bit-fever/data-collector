@@ -80,6 +80,7 @@ func addDataProduct(dpm *DataProductMessage) bool {
 		pd.Username             = dpm.DataProduct.Username
 		pd.SystemCode           = dpm.Connection.SystemCode
 		pd.ConnectionCode       = dpm.Connection.Code
+		pd.Connected            = dpm.Connection.Connected
 		pd.SupportsMultipleData = dpm.Connection.SupportsMultipleData
 		pd.Timezone             = dpm.Exchange.Timezone
 
