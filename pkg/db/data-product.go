@@ -31,6 +31,19 @@ import (
 
 //=============================================================================
 
+func GetDataProducts(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]DataProduct, error) {
+	var list []DataProduct
+	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	return &list, nil
+}
+
+//=============================================================================
+
 func GetDataProductById(tx *gorm.DB, id uint) (*DataProduct, error) {
 	var list []DataProduct
 	res := tx.Find(&list, id)
@@ -54,12 +67,6 @@ func AddDataProduct(tx *gorm.DB, p *DataProduct) error {
 
 //=============================================================================
 
-func UpdateDataProduct(tx *gorm.DB, p *DataProduct) error {
-	return tx.Save(p).Error
-}
-
-//=============================================================================
-
 func DisconnectAll(tx *gorm.DB) error {
 	return tx.Model(&DataProduct{}).
 		Where("supports_multiple_data = false").
@@ -72,6 +79,14 @@ func SetConnectionStatus(tx *gorm.DB, user, code string, flag bool) error {
 	return tx.Model(&DataProduct{}).
 		Where("username = ? AND connection_code = ?", user, code).
 		Update("connected", flag).Error
+}
+
+//=============================================================================
+
+func SetDataProductStatus(tx *gorm.DB, id uint, status DPStatus) error {
+	return tx.Model(&DataProduct{}).
+		Where("id = ?", id).
+		Update("status", status).Error
 }
 
 //=============================================================================

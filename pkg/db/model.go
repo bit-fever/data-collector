@@ -24,7 +24,9 @@ THE SOFTWARE.
 
 package db
 
-import "time"
+import (
+	"time"
+)
 
 //=============================================================================
 
@@ -40,15 +42,26 @@ type Common struct {
 //===
 //=============================================================================
 
+type DPStatus int
+
+const (
+	DPStatusFetchingInventory DPStatus = 1
+	DPStatusFetchingData      DPStatus = 2
+	DPStatusReady             DPStatus = 0
+)
+
+//-----------------------------------------------------------------------------
+
 type DataProduct struct {
-	Id                   uint    `json:"id" gorm:"primaryKey"`
-	Symbol               string  `json:"symbol"`
-	Username             string  `json:"username"`
-	SystemCode           string  `json:"systemCode"`
-	ConnectionCode       string  `json:"connectionCode"`
-	SupportsMultipleData bool    `json:"supportsMultipleData"`
-	Connected            bool    `json:"connected"`
-	Timezone             string  `json:"timezone"`
+	Id                   uint     `json:"id" gorm:"primaryKey"`
+	Username             string   `json:"username"`
+	ConnectionCode       string   `json:"connectionCode"`
+	SystemCode           string   `json:"systemCode"`
+	Symbol               string   `json:"symbol"`
+	SupportsMultipleData bool     `json:"supportsMultipleData"`
+	Connected            bool     `json:"connected"`
+	Timezone             string   `json:"timezone"`
+	Status               DPStatus `json:"status"`
 }
 
 //=============================================================================
@@ -58,15 +71,15 @@ const InstrumentStatusProcessing =  1
 const InstrumentStatusError      = -1
 
 type DataInstrument struct {
-	Id               uint    `json:"id" gorm:"primaryKey"`
-	DataProductId    uint    `json:"dataProductId"`
-	Symbol           string  `json:"symbol"`
-	Name             string  `json:"name"`
-	ExpirationDate   int     `json:"expirationDate,omitempty"`
-	Continuous       bool    `json:"continuous"`
-	Status           int8    `json:"status"`
-	DataFrom         int     `json:"dataFrom"`
-	DataTo           int     `json:"dataTo"`
+	Id               uint       `json:"id" gorm:"primaryKey"`
+	DataProductId    uint       `json:"dataProductId"`
+	Symbol           string     `json:"symbol"`
+	Name             string     `json:"name"`
+	ExpirationDate   *time.Time `json:"expirationDate,omitempty"`
+	Continuous       bool       `json:"continuous"`
+	Status           int8       `json:"status"`
+	DataFrom         int        `json:"dataFrom"`
+	DataTo           int        `json:"dataTo"`
 }
 
 //=============================================================================
@@ -116,8 +129,9 @@ type LoadedPeriod struct {
 
 type BrokerProduct struct {
 	Id               uint    `json:"id" gorm:"primaryKey"`
-	Symbol           string  `json:"symbol"`
 	Username         string  `json:"username"`
+	ConnectionCode   string  `json:"connectionCode"`
+	Symbol           string  `json:"symbol"`
 	Name             string  `json:"name"`
 	PointValue       float32 `json:"pointValue"`
 	CostPerOperation float32 `json:"costPerOperation"`

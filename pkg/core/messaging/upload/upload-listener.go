@@ -26,6 +26,7 @@ package upload
 
 import (
 	"encoding/json"
+	"github.com/bit-fever/core/datatype"
 	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
@@ -191,7 +192,13 @@ func updateLoadedPeriod(tx *gorm.DB, i *db.DataInstrument, dr *DataRange) error 
 	}
 
 	if !i.Continuous {
-		i.ExpirationDate = i.DataTo
+		i.ExpirationDate = nil
+
+		if i.DataTo != 0 {
+			d := datatype.IntDate(i.DataTo)
+			t := d.ToDateTime(false, time.UTC)
+			i.ExpirationDate = &t
+		}
 	}
 	return db.UpdateDataInstrument(tx, i)
 }

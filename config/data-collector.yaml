@@ -10,7 +10,7 @@ database:
 authentication:
   authority: https://bitfever-server:8443/auth/realms/bitfever
   clientId: bitfever-backend
-  clientSecret: xyz
+  clientSecret: AXRNrPrBiiOlBcwiOPX67XFTcbu9p9IZ
 platform:
   system: https://bitfever-server:8449/api/system
 messaging:

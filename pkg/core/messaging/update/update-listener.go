@@ -83,6 +83,11 @@ func addDataProduct(dpm *DataProductMessage) bool {
 		pd.Connected            = dpm.Connection.Connected
 		pd.SupportsMultipleData = dpm.Connection.SupportsMultipleData
 		pd.Timezone             = dpm.Exchange.Timezone
+		pd.Status               = db.DPStatusReady
+
+		if !pd.SupportsMultipleData {
+			pd.Status = db.DPStatusFetchingInventory
+		}
 
 		return db.AddDataProduct(tx, pd)
 	})
@@ -97,6 +102,8 @@ func addDataProduct(dpm *DataProductMessage) bool {
 }
 
 //=============================================================================
+//--- If the pointValue or costPerOperation change, it is wise to invalidate the results
+//--- of the current bias analyses
 
 func setBrokerProduct(bpm *BrokerProductMessage) bool {
 	slog.Info("setBrokerProduct: Broker product change received", "id", bpm.BrokerProduct.Id)
@@ -105,8 +112,9 @@ func setBrokerProduct(bpm *BrokerProductMessage) bool {
 		bp := &db.BrokerProduct{}
 
 		bp.Id               = bpm.BrokerProduct.Id
-		bp.Symbol           = bpm.BrokerProduct.Symbol
 		bp.Username         = bpm.BrokerProduct.Username
+		bp.ConnectionCode   = bpm.Connection.Code
+		bp.Symbol           = bpm.BrokerProduct.Symbol
 		bp.Name             = bpm.BrokerProduct.Name
 		bp.PointValue       = bpm.BrokerProduct.PointValue
 		bp.CostPerOperation = bpm.BrokerProduct.CostPerOperation
