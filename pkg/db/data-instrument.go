@@ -31,13 +31,18 @@ import (
 
 //=============================================================================
 
-func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrument, error) {
-	var list []DataInstrument
+func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt, error) {
+	var list []DataInstrumentExt
 
 	filter := map[string]any{}
 	filter["data_product_id"] = pId
 
-	res := tx.Where(filter).Find(&list)
+	res := tx.
+		Select("data_instrument.*, db.status, db.data_from, db.data_to, db.progress ").
+		Joins("JOIN data_block db ON db.id = data_block_id").
+		Where(filter).
+		Order("symbol").
+		Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
@@ -117,13 +122,25 @@ func UpdateDataInstrument(tx *gorm.DB, i *DataInstrument) error {
 
 //=============================================================================
 
-func AddUploadJob(tx *gorm.DB, job *UploadJob) error {
+func AddIngestionJob(tx *gorm.DB, job *IngestionJob) error {
 	return tx.Create(job).Error
 }
 
 //=============================================================================
 
-func UpdateUploadJob(tx *gorm.DB, job *UploadJob) error {
+func UpdateIngestionJob(tx *gorm.DB, job *IngestionJob) error {
+	return tx.Save(job).Error
+}
+
+//=============================================================================
+
+func AddDownloadJob(tx *gorm.DB, job *DownloadJob) error {
+	return tx.Create(job).Error
+}
+
+//=============================================================================
+
+func UpdateDownloadJob(tx *gorm.DB, job *DownloadJob) error {
 	return tx.Save(job).Error
 }
 

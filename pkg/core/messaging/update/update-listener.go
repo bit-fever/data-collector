@@ -26,10 +26,11 @@ package update
 
 import (
 	"encoding/json"
+	"log/slog"
+
 	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
 //=============================================================================
@@ -83,6 +84,8 @@ func addDataProduct(dpm *DataProductMessage) bool {
 		pd.Connected            = dpm.Connection.Connected
 		pd.SupportsMultipleData = dpm.Connection.SupportsMultipleData
 		pd.Timezone             = dpm.Exchange.Timezone
+		pd.Months               = dpm.DataProduct.Months
+		pd.RollType             = dpm.DataProduct.RollType
 		pd.Status               = db.DPStatusReady
 
 		if !pd.SupportsMultipleData {

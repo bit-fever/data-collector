@@ -26,14 +26,14 @@ package upload
 
 import (
 	"encoding/json"
-	"github.com/bit-fever/core/datatype"
+	"log/slog"
+	"time"
+
 	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
-	"log/slog"
-	"time"
 )
 
 //=============================================================================
@@ -43,7 +43,7 @@ func HandleUploadMessage(m *msg.Message) bool {
 	slog.Info("New upload message received", "source", m.Source, "type", m.Type)
 
 	if m.Source == msg.SourceUploadJob {
-		job := db.UploadJob{}
+		job := db.IngestionJob{}
 		err := json.Unmarshal(m.Entity, &job)
 		if err != nil {
 			slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
@@ -61,23 +61,23 @@ func HandleUploadMessage(m *msg.Message) bool {
 
 //=============================================================================
 
-func uploadFile(job *db.UploadJob) bool {
+func uploadFile(job *db.IngestionJob) bool {
 	//--- Wait 2 secs to allow the commit to complete
 	time.Sleep(time.Second *2)
 
 	slog.Info("uploadFile: Uploading data file into datastore", "filename", job.Filename)
 	var context *ParserContext
 
-	err := setJobInAdding(job)
+	block,err := setDataBlockInLoading(job)
 	if err == nil {
-		context,err = ingestDatafile(job)
+		context,err = ingestDatafile(job,block)
 		if err == nil {
-			err = updateJob(job, context.DataRange)
+			err = setDataBlockInProcessing(job, block, context.DataRange)
 			if err == nil {
 				slog.Info("uploadFile: Calculating aggregates", "filename", job.Filename)
 				err = calcAggregates(context)
 				if err == nil {
-					err = setJobInReady(job)
+					err = setBlockInReady(block)
 					if err == nil {
 						slog.Info("uploadFile: Operation complete", "filename", job.Filename)
 						_=ds.DeleteDataFile(job.Filename)
@@ -89,14 +89,34 @@ func uploadFile(job *db.UploadJob) bool {
 	}
 
 	slog.Error("uploadFile: Raised error while processing message", "filename", job.Filename, "error", err.Error())
-	setJobInError(err, job)
+	setJobInError(err, job, block)
 	_=ds.DeleteDataFile(job.Filename)
 	return true
 }
 
 //=============================================================================
 
-func ingestDatafile(job *db.UploadJob) (*ParserContext, error) {
+func setDataBlockInLoading(job *db.IngestionJob) (*db.DataBlock, error) {
+	var b *db.DataBlock
+	var err error
+
+	err = db.RunInTransaction(func(tx *gorm.DB) error {
+		b,err = db.GetDataBlockById(tx, job.DataBlockId)
+		if err != nil {
+			return err
+		}
+		b.Status   = db.DBStatusLoading
+		b.Progress = 0
+
+		return db.UpdateDataBlock(tx, b)
+	})
+
+	return b,err
+}
+
+//=============================================================================
+
+func ingestDatafile(job *db.IngestionJob, b *db.DataBlock) (*ParserContext, error) {
 	start := time.Now()
 
 	parser,err := NewParser(job.Parser)
@@ -119,7 +139,7 @@ func ingestDatafile(job *db.UploadJob) (*ParserContext, error) {
 		return nil,err
 	}
 
-	context := NewParserContext(file, config, loc, job)
+	context := NewParserContext(file, config, loc, job, b)
 	defer file.Close()
 
 	err = parser.Parse(context)
@@ -164,97 +184,45 @@ func retrieveConfig(id uint) (*ds.DataConfig, error) {
 
 //=============================================================================
 
-func updateJob(job *db.UploadJob, dr *DataRange) error {
+func setDataBlockInProcessing(job *db.IngestionJob, b *db.DataBlock, dr *DataRange) error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
-		i, err := db.GetDataInstrumentById(tx, job.DataInstrumentId)
-		if err == nil {
-			err = updateLoadedPeriod(tx, i, dr)
-			if err == nil {
-				err = updateUploadJob(tx, job)
-			}
+		if b.DataFrom.IsNil() || b.DataFrom > dr.FromDay {
+			b.DataFrom = dr.FromDay
 		}
 
-		return err
+		if b.DataTo.IsNil() || b.DataTo < dr.ToDay {
+			b.DataTo = dr.ToDay
+		}
+
+		b.Status  = db.DBStatusProcessing
+		err := db.UpdateDataBlock(tx, b)
+		if err != nil {
+			return err
+		}
+
+		return db.UpdateIngestionJob(tx, job)
 	})
 }
 
 //=============================================================================
 
-func updateLoadedPeriod(tx *gorm.DB, i *db.DataInstrument, dr *DataRange) error {
-	//--- Update loaded period
-
-	if i.DataFrom == 0 || i.DataFrom > dr.FromDay {
-		i.DataFrom = dr.FromDay
-	}
-
-	if i.DataTo == 0 || i.DataTo < dr.ToDay {
-		i.DataTo = dr.ToDay
-	}
-
-	if !i.Continuous {
-		i.ExpirationDate = nil
-
-		if i.DataTo != 0 {
-			d := datatype.IntDate(i.DataTo)
-			t := d.ToDateTime(false, time.UTC)
-			i.ExpirationDate = &t
-		}
-	}
-	return db.UpdateDataInstrument(tx, i)
-}
-
-//=============================================================================
-
-func updateUploadJob(tx *gorm.DB, job *db.UploadJob) error {
-	job.Status  = db.UploadJobStatusAggregating
-	job.Progress= 0
-	return db.UpdateUploadJob(tx, job)
-}
-
-//=============================================================================
-
-func setJobInAdding(job *db.UploadJob) error {
+func setBlockInReady(block *db.DataBlock) error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
-		job.Status = db.UploadJobStatusAdding
-		return db.UpdateUploadJob(tx, job)
+		block.Status  = db.DBStatusReady
+		block.Progress= 100
+
+		return db.UpdateDataBlock(tx, block)
 	})
 }
 
 //=============================================================================
 
-func setJobInReady(job *db.UploadJob) error {
-	return db.RunInTransaction(func(tx *gorm.DB) error {
-		var i *db.DataInstrument
-
-		job.Status  = db.UploadJobStatusReady
-		job.Progress= 100
-
-		err := db.UpdateUploadJob(tx, job)
-		if err == nil {
-			i, err = db.GetDataInstrumentById(tx, job.DataInstrumentId)
-			if err == nil {
-				i.Status = db.InstrumentStatusReady
-				err = db.UpdateDataInstrument(tx, i)
-			}
-		}
-
-		return err
-	})
-}
-
-//=============================================================================
-
-func setJobInError(err error, job *db.UploadJob) {
+func setJobInError(err error, job *db.IngestionJob, block *db.DataBlock) {
 	_ = db.RunInTransaction(func(tx *gorm.DB) error {
-		job.Status = db.UploadJobStatusError
-		job.Error = err.Error()
-		_ = db.UpdateUploadJob(tx, job)
-
-		i, err := db.GetDataInstrumentById(tx, job.DataInstrumentId)
-		if err == nil {
-			i.Status = db.InstrumentStatusError
-			_ = db.UpdateDataInstrument(tx, i)
-		}
+		block.Status = db.DBStatusError
+		job  .Error  = err.Error()
+		_ = db.UpdateDataBlock(tx, block)
+		_ = db.UpdateIngestionJob(tx, job)
 
 		return nil
 	})

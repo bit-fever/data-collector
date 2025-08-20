@@ -40,7 +40,6 @@ import (
 type DatafileUploadSpec struct {
 	Symbol        string `json:"symbol"       binding:"required"`
 	Name          string `json:"name"         binding:"required"`
-	Continuous    bool   `json:"continuous"   binding:"required"`
 	FileTimezone  string `json:"fileTimezone" binding:"required"`
 	Parser        string `json:"parser"       binding:"required"`
 }

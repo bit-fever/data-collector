@@ -26,6 +26,8 @@ package db
 
 import (
 	"time"
+
+	"github.com/bit-fever/core/datatype"
 )
 
 //=============================================================================
@@ -52,34 +54,40 @@ const (
 
 //-----------------------------------------------------------------------------
 
+type DPRollType int
+
+const (
+	RollTypeStandard = 0
+)
+
+//-----------------------------------------------------------------------------
+
 type DataProduct struct {
-	Id                   uint     `json:"id" gorm:"primaryKey"`
-	Username             string   `json:"username"`
-	ConnectionCode       string   `json:"connectionCode"`
-	SystemCode           string   `json:"systemCode"`
-	Symbol               string   `json:"symbol"`
-	SupportsMultipleData bool     `json:"supportsMultipleData"`
-	Connected            bool     `json:"connected"`
-	Timezone             string   `json:"timezone"`
-	Status               DPStatus `json:"status"`
+	Id                   uint       `json:"id" gorm:"primaryKey"`
+	Username             string     `json:"username"`
+	ConnectionCode       string     `json:"connectionCode"`
+	SystemCode           string     `json:"systemCode"`
+	Symbol               string     `json:"symbol"`
+	SupportsMultipleData bool       `json:"supportsMultipleData"`
+	Connected            bool       `json:"connected"`
+	Timezone             string     `json:"timezone"`
+	Status               DPStatus   `json:"status"`
+	Months               string     `json:"months"`
+	RollType             DPRollType `json:"rollType"`
 }
 
 //=============================================================================
 
-const InstrumentStatusReady      =  0
-const InstrumentStatusProcessing =  1
-const InstrumentStatusError      = -1
-
 type DataInstrument struct {
-	Id               uint       `json:"id" gorm:"primaryKey"`
-	DataProductId    uint       `json:"dataProductId"`
-	Symbol           string     `json:"symbol"`
-	Name             string     `json:"name"`
-	ExpirationDate   *time.Time `json:"expirationDate,omitempty"`
-	Continuous       bool       `json:"continuous"`
-	Status           int8       `json:"status"`
-	DataFrom         int        `json:"dataFrom"`
-	DataTo           int        `json:"dataTo"`
+	Id               uint      `json:"id" gorm:"primaryKey"`
+	DataProductId    uint      `json:"dataProductId"`
+	DataBlockId     *uint      `json:"dataBlockId"`
+	Symbol           string    `json:"symbol"`
+	Name             string    `json:"name"`
+	ExpirationDate  *time.Time `json:"expirationDate,omitempty"`
+	Continuous       bool      `json:"continuous"`
+	Month            string    `json:"month"`
+	RollDelta        float64   `json:"rollDelta"`
 }
 
 //=============================================================================
@@ -93,32 +101,65 @@ type DataInstrumentFull struct {
 
 //=============================================================================
 
-const UploadJobStatusWaiting     = 0
-const UploadJobStatusAdding      = 1
-const UploadJobStatusAggregating = 2
-const UploadJobStatusReady       = 3
-const UploadJobStatusError       = -1
-
-type UploadJob struct {
-	Id               uint    `json:"id" gorm:"primaryKey"`
-	DataInstrumentId uint    `json:"dataInstrumentId"`
-	Status           int8    `json:"status"`
-	Filename         string  `json:"filename"`
-	Error            string  `json:"error"`
-	Progress         int8    `json:"progress"`
-	Records          int     `json:"records"`
-	Bytes            int64   `json:"bytes"`
-	Timezone         string  `json:"timezone"`
-	Parser           string  `json:"parser"`
+type DataInstrumentExt struct {
+	DataInstrument
+	Status    DBStatus         `json:"status"`
+	DataFrom  datatype.IntDate `json:"dataFrom"`
+	DataTo    datatype.IntDate `json:"dataTo"`
+	Progress  int8             `json:"progress"`
 }
 
 //=============================================================================
 
-type LoadedPeriod struct {
-	Id               uint   `json:"id" gorm:"primaryKey"`
-	DataInstrumentId uint   `json:"dataInstrumentId"`
-	Day              int    `json:"day"`
-	Status           int    `json:"status"`
+type DBStatus int
+
+const (
+	DBStatusWaiting    =  1
+	DBStatusLoading    =  2
+	DBStatusProcessing =  3
+	DBStatusSleeping   =  4
+	DBStatusReady      =  0
+	DBStatusError      = -1
+)
+
+//-----------------------------------------------------------------------------
+
+type DataBlock struct {
+	Id             uint             `json:"id" gorm:"primaryKey"`
+	SystemCode     string           `json:"systemCode"`
+	Root           string           `json:"root"`
+	Symbol         string           `json:"symbol"`
+	Status         DBStatus         `json:"status"`
+	Global         bool             `json:"global"`
+	DataFrom       datatype.IntDate `json:"dataFrom"`
+	DataTo         datatype.IntDate `json:"dataTo"`
+	Progress       int8             `json:"progress"`
+}
+
+//=============================================================================
+
+type IngestionJob struct {
+	Id                uint    `json:"id" gorm:"primaryKey"`
+	DataInstrumentId  uint    `json:"dataInstrumentId"`
+	DataBlockId       uint    `json:"dataBlockId"`
+	Filename          string  `json:"filename"`
+	Records           int     `json:"records"`
+	Bytes             int64   `json:"bytes"`
+	Timezone          string  `json:"timezone"`
+	Parser            string  `json:"parser"`
+	Error             string  `json:"error"`
+}
+
+//=============================================================================
+
+type DownloadJob struct {
+	Id                uint             `json:"id" gorm:"primaryKey"`
+	DataInstrumentId  uint             `json:"dataInstrumentId"`
+	DataBlockId       uint             `json:"dataBlockId"`
+	LoadFrom          datatype.IntDate `json:"loadFrom"`
+	LoadTo            datatype.IntDate `json:"loadTo"`
+	Priority          int              `json:"priority"`
+	Error             string           `json:"error"`
 }
 
 //=============================================================================
@@ -187,9 +228,10 @@ type BiasConfig struct {
 
 func (DataProduct)    TableName() string { return "data_product"    }
 func (DataInstrument) TableName() string { return "data_instrument" }
+func (DataBlock)      TableName() string { return "data_block"      }
 func (BrokerProduct)  TableName() string { return "broker_product"  }
-func (LoadedPeriod)   TableName() string { return "loaded_period"   }
-func (UploadJob)      TableName() string { return "upload_job"      }
+func (IngestionJob)   TableName() string { return "ingestion_job"   }
+func (DownloadJob)    TableName() string { return "download_job"    }
 func (BiasAnalysis)   TableName() string { return "bias_analysis"   }
 func (BiasConfig)     TableName() string { return "bias_config"     }
 

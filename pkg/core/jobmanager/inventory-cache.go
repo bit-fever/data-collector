@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,76 +22,62 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
+package jobmanager
 
 import (
-	"github.com/bit-fever/core/req"
-	"gorm.io/gorm"
+	"sync"
+
+	"github.com/bit-fever/data-collector/pkg/db"
 )
 
 //=============================================================================
 
-func GetDataProducts(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]DataProduct, error) {
-	var list []DataProduct
-	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
+type InventoryCache struct {
+	sync.RWMutex
+	adaptersMap map[string]*AdapterCache
+}
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+//=============================================================================
+
+func NewInventoryCache() *InventoryCache {
+	ic := InventoryCache{
+		adaptersMap: make(map[string]*AdapterCache),
 	}
 
-	return &list, nil
+	return &ic
 }
 
 //=============================================================================
+//===
+//=== API methods
+//===
+//=============================================================================
 
-func GetDataProductById(tx *gorm.DB, id uint) (*DataProduct, error) {
-	var list []DataProduct
-	res := tx.Find(&list, id)
+func (ic *InventoryCache) getDataBlock(systemCode, root, symbol string) *db.DataBlock {
+	ic.RLock()
+	ac, found := ic.adaptersMap[systemCode]
+	ic.RUnlock()
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
+	if found {
+		return ac.getDataBlock(root, symbol)
 	}
 
-	if len(list) == 1 {
-		return &list[0], nil
+	return nil
+}
+
+//=============================================================================
+
+func (ic *InventoryCache) addDataBlock(db *db.DataBlock) {
+	ic.Lock()
+
+	ac, found := ic.adaptersMap[db.SystemCode]
+	if !found {
+		ac = NewAdapterCache()
+		ic.adaptersMap[db.SystemCode] = ac
 	}
 
-	return nil, nil
-}
-
-//=============================================================================
-
-func AddDataProduct(tx *gorm.DB, p *DataProduct) error {
-	return tx.Create(p).Error
-}
-
-//=============================================================================
-
-func DisconnectAll(tx *gorm.DB) error {
-	return tx.Model(&DataProduct{}).
-		Where("supports_multiple_data = false").
-		Update("connected", false).Error
-}
-
-//=============================================================================
-
-func SetConnectionStatus(tx *gorm.DB, user, code string, flag bool) error {
-	return tx.Model(&DataProduct{}).
-		Where("username = ? AND connection_code = ?", user, code).
-		Update("connected", flag).Error
-}
-
-//=============================================================================
-
-func UpdateDataProductFields(tx *gorm.DB, id uint, status DPStatus) error {
-	fields := map[string]interface{}{
-		"status" : status,
-	}
-
-	return tx.Model(&DataProduct{}).
-		Where("id = ?", id).
-		Updates(fields).
-		Error
+	ic.Unlock()
+	ac.addDataBlock(db)
 }
 
 //=============================================================================

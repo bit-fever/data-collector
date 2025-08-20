@@ -28,6 +28,8 @@ import (
 	"errors"
 	"strconv"
 	"time"
+
+	"github.com/bit-fever/core/datatype"
 )
 
 //=============================================================================
@@ -132,17 +134,17 @@ func parseTime(hhmm string) (int, int, error) {
 
 func updateDataRange(t time.Time, r *DataRange) {
 	y, m, d := t.Date()
-	date := y*10000 + int(m)*100 + d
+	date := datatype.IntDate(y*10000 + int(m)*100 + d)
 
 	//--- Handle from day
 
-	if r.FromDay == 0 || r.FromDay > date {
+	if r.FromDay.IsNil() || r.FromDay > date {
 		r.FromDay = date
 	}
 
 	//--- Handle to day
 
-	if r.ToDay == 0 || r.ToDay < date {
+	if r.ToDay.IsNil() || r.ToDay < date {
 		r.ToDay = date
 	}
 }

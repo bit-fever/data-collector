@@ -47,6 +47,7 @@ type Instrument struct {
 	PointValue      int        `json:"pointValue"`
 	MinMove         float64    `json:"minMove"`
 	Continuous      bool       `json:"continuous"`
+	Month           string     `json:"month"`
 }
 
 //=============================================================================

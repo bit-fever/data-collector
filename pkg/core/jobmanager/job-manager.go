@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,110 +22,70 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package upload
+package jobmanager
 
 import (
-	"io"
-	"time"
+	"log/slog"
+	"os"
 
+	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/bit-fever/data-collector/pkg/db"
-	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-type ParserContext struct {
-	Reader     io.Reader
-	Config     *ds.DataConfig
-	Location   *time.Location
-	Job        *db.IngestionJob
-	Block      *db.DataBlock
-	DataRange  *DataRange
-	DataAggreg *ds.DataAggregator
-
-	//--- Private stuff
-
-	dataPoints []*ds.DataPoint
-	currBytes  int64
-}
+var cache *InventoryCache
 
 //=============================================================================
-//===
-//=== Constructor
-//===
-//=============================================================================
 
-func NewParserContext(file io.Reader, config *ds.DataConfig, loc *time.Location, job *db.IngestionJob, b *db.DataBlock) *ParserContext {
-	c := &ParserContext{
-		Reader  : file,
-		Config  : config,
-		Location: loc,
-		Job     : job,
-		Block   : b,
+func Init(cfg *app.Config) {
+	slog.Info("JobManager: Initializing cache...")
+
+	err := initCache()
+	if err != nil {
+		slog.Error("Fatal: Cannot initialize Job manager. ", "error", err.Error())
+		os.Exit(1)
 	}
-
-	c.dataPoints = []*ds.DataPoint{}
-	c.DataRange  = &DataRange{}
-	c.DataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m)
-
-	return c
 }
 
 //=============================================================================
 //===
-//=== Public methods
+//=== Public functions
 //===
 //=============================================================================
 
-func (c *ParserContext) SaveDataPoint(dp *ds.DataPoint, bytes int) error {
-	c.dataPoints = append(c.dataPoints, dp)
-	c.Job.Records++
-	c.currBytes += int64(bytes)
+func GetDataBlock(systemCode, root, symbol string) *db.DataBlock {
+	return cache.getDataBlock(systemCode, root, symbol)
+}
 
-	if c.Job.Records % 8192 == 0 {
-		if err := ds.SetDataPoints(c.dataPoints, c.Config); err != nil {
+//=============================================================================
+
+func AddDataBlock(block *db.DataBlock) {
+	cache.addDataBlock(block)
+}
+
+//=============================================================================
+//===
+//=== Private functions
+//===
+//=============================================================================
+
+func initCache() error {
+	return db.RunInTransaction(func(tx *gorm.DB) error {
+		list,err := db.GetGlobalDataBlocks(tx)
+		if err != nil {
 			return err
 		}
-		c.dataPoints = []*ds.DataPoint{}
-	}
 
-	updateDataRange(dp.Time, c.DataRange)
-	c.DataAggreg.Add(dp)
+		cache = NewInventoryCache()
 
-	return c.updateProgress()
-}
+		for _,d := range *list {
+			cache.addDataBlock(&d)
+		}
 
-//=============================================================================
-
-func (c *ParserContext) Flush() error {
-	c.DataAggreg.Flush()
-	return ds.SetDataPoints(c.dataPoints, c.Config)
-}
-
-//=============================================================================
-//===
-//=== Private methods
-//===
-//=============================================================================
-
-func (c *ParserContext) updateProgress() error {
-	curProgress := int8(c.currBytes * 100 / c.Job.Bytes)
-
-	if c.Block.Progress != curProgress {
-		c.Block.Progress = curProgress
-
-		return db.RunInTransaction(func(tx *gorm.DB) error {
-			err := db.UpdateDataBlock(tx, c.Block)
-			if err != nil {
-				return err
-			}
-
-			return db.UpdateIngestionJob(tx, c.Job)
-		})
-	}
-
-	return nil
+		return nil
+	})
 }
 
 //=============================================================================

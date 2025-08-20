@@ -30,6 +30,7 @@ import (
 	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/core/req"
 	"github.com/bit-fever/data-collector/pkg/app"
+	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
 	"github.com/bit-fever/data-collector/pkg/core/messaging"
 	"github.com/bit-fever/data-collector/pkg/core/process"
 	"github.com/bit-fever/data-collector/pkg/db"
@@ -59,6 +60,7 @@ func main() {
 	service.Init(engine, cfg, logger)
 	messaging.InitMessageListener()
 	process.Init(cfg)
+	jobmanager.Init(cfg)
 	boot.RunHttpServer(engine, &cfg.Application)
 }
 

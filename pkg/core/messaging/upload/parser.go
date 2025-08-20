@@ -26,6 +26,7 @@ package upload
 
 import (
 	"errors"
+	"github.com/bit-fever/core/datatype"
 )
 
 //=============================================================================
@@ -36,8 +37,8 @@ const TradestationName = "Tradestation (ASCII)"
 //=============================================================================
 
 type DataRange struct {
-	FromDay int
-	ToDay   int
+	FromDay datatype.IntDate
+	ToDay   datatype.IntDate
 }
 
 //=============================================================================

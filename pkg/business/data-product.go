@@ -26,6 +26,8 @@ package business
 
 import (
 	"errors"
+	"strconv"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/core/req"
@@ -35,7 +37,7 @@ import (
 
 //=============================================================================
 
-func GetDataInstrumentsByProductId(tx *gorm.DB, c *auth.Context, productId uint)(*[]db.DataInstrument, error) {
+func GetDataInstrumentsByProductId(tx *gorm.DB, c *auth.Context, productId uint)(*[]db.DataInstrumentExt, error) {
 	return db.GetDataInstrumentsByProductId(tx, productId)
 }
 
@@ -54,28 +56,12 @@ func AddDataInstrumentAndJob(tx *gorm.DB, c *auth.Context, productId uint, spec 
 		return err
 	}
 
+	var b *db.DataBlock
+
 	if i == nil {
-		i = &db.DataInstrument{
-			DataProductId: p.Id,
-			Symbol       : spec.Symbol,
-			Name         : spec.Name,
-			Continuous   : spec.Continuous,
-			Status       : db.InstrumentStatusProcessing,
-		}
-
-		err = db.AddDataInstrument(tx, i)
-		if err != nil {
-			return err
-		}
+		i,b,err = createDataInstrument(tx, p, spec)
 	} else {
-		i.Name       = spec.Name
-		i.Continuous = spec.Continuous
-		i.Status     = db.InstrumentStatusProcessing
-
-		err = db.UpdateDataInstrument(tx, i)
-		if err != nil {
-			return err
-		}
+		b,err = updateDataInstrument(tx, i, spec)
 	}
 
 	timezone,err := calcTimezone(spec.FileTimezone, p)
@@ -85,16 +71,16 @@ func AddDataInstrumentAndJob(tx *gorm.DB, c *auth.Context, productId uint, spec 
 
 	//--- Add upload job
 
-	job := &db.UploadJob{
+	job := &db.IngestionJob{
 		DataInstrumentId: i.Id,
-		Status          : db.UploadJobStatusWaiting,
+		DataBlockId     : b.Id,
 		Filename        : filename,
 		Bytes           : bytes,
 		Timezone        : timezone,
 		Parser          : spec.Parser,
 	}
 
-	err = db.AddUploadJob(tx, job)
+	err = db.AddIngestionJob(tx, job)
 	if err != nil {
 		return err
 	}
@@ -133,7 +119,68 @@ func getDataProductAndCheckAccess(tx *gorm.DB, c *auth.Context, id uint, functio
 
 //=============================================================================
 
-func sendIngestJobMessage(c *auth.Context, job *db.UploadJob) error {
+func createDataInstrument(tx *gorm.DB, p *db.DataProduct, spec *DatafileUploadSpec) (*db.DataInstrument, *db.DataBlock, error) {
+	//--- Add its associated DataBlock
+	b := &db.DataBlock{
+		SystemCode: p.SystemCode,
+		Root      : p.Symbol,
+		Symbol    : spec.Symbol,
+		Status    : db.DBStatusWaiting,
+		Global    : false,
+		Progress  : 0,
+	}
+
+	err := db.AddDataBlock(tx, b)
+	if err != nil {
+		return nil,nil,err
+	}
+
+	//--- Add a new DataInstrument
+
+	i := &db.DataInstrument{
+		DataProductId: p.Id,
+		DataBlockId  : &b.Id,
+		Symbol       : spec.Symbol,
+		Name         : spec.Name,
+		Continuous   : false,
+	}
+
+	err = db.AddDataInstrument(tx, i)
+
+	return i,b,err
+}
+
+//=============================================================================
+
+func updateDataInstrument(tx *gorm.DB, i *db.DataInstrument, spec *DatafileUploadSpec) (*db.DataBlock, error) {
+	i.Name = spec.Name
+
+	err := db.UpdateDataInstrument(tx, i)
+	if err != nil {
+		return nil,err
+	}
+
+	var b *db.DataBlock
+	b,err = db.GetDataBlockById(tx, *i.DataBlockId)
+	if err != nil {
+		return nil,err
+	}
+
+	if b == nil {
+		return nil, errors.New("Panic: DataBlock was not found! --> id="+ strconv.Itoa(int(*i.DataBlockId)))
+	}
+
+	b.Status   = db.DBStatusWaiting
+	b.Progress = 0
+
+	err = db.UpdateDataBlock(tx, b)
+
+	return b,err
+}
+
+//=============================================================================
+
+func sendIngestJobMessage(c *auth.Context, job *db.IngestionJob) error {
 	err := msg.SendMessage(msg.ExCollector, msg.SourceUploadJob, msg.TypeCreate, job)
 
 	if err != nil {

@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,76 +22,38 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package db
+package barloader
 
 import (
-	"github.com/bit-fever/core/req"
-	"gorm.io/gorm"
+	"github.com/bit-fever/data-collector/pkg/app"
+	"time"
 )
 
 //=============================================================================
 
-func GetDataProducts(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]DataProduct, error) {
-	var list []DataProduct
-	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
-
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
-	}
-
-	return &list, nil
-}
+var ticker *time.Ticker
 
 //=============================================================================
 
-func GetDataProductById(tx *gorm.DB, id uint) (*DataProduct, error) {
-	var list []DataProduct
-	res := tx.Find(&list, id)
+func Init(cfg *app.Config) *time.Ticker {
+	ticker = time.NewTicker(10 * time.Second)
 
-	if res.Error != nil {
-		return nil, req.NewServerErrorByError(res.Error)
-	}
+	go func() {
+		for range ticker.C {
+			run()
+		}
+	}()
 
-	if len(list) == 1 {
-		return &list[0], nil
-	}
-
-	return nil, nil
+	return ticker
 }
 
 //=============================================================================
-
-func AddDataProduct(tx *gorm.DB, p *DataProduct) error {
-	return tx.Create(p).Error
-}
-
+//===
+//=== Data loader
+//===
 //=============================================================================
 
-func DisconnectAll(tx *gorm.DB) error {
-	return tx.Model(&DataProduct{}).
-		Where("supports_multiple_data = false").
-		Update("connected", false).Error
-}
-
-//=============================================================================
-
-func SetConnectionStatus(tx *gorm.DB, user, code string, flag bool) error {
-	return tx.Model(&DataProduct{}).
-		Where("username = ? AND connection_code = ?", user, code).
-		Update("connected", flag).Error
-}
-
-//=============================================================================
-
-func UpdateDataProductFields(tx *gorm.DB, id uint, status DPStatus) error {
-	fields := map[string]interface{}{
-		"status" : status,
-	}
-
-	return tx.Model(&DataProduct{}).
-		Where("id = ?", id).
-		Updates(fields).
-		Error
+func run() {
 }
 
 //=============================================================================

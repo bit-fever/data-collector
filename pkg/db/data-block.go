@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,21 +31,25 @@ import (
 
 //=============================================================================
 
-func GetDataProducts(tx *gorm.DB, filter map[string]any, offset int, limit int) (*[]DataProduct, error) {
-	var list []DataProduct
-	res := tx.Where(filter).Offset(offset).Limit(limit).Find(&list)
+func GetGlobalDataBlocks(tx *gorm.DB, ) (*[]DataBlock, error){
+	var list []DataBlock
+
+	filter := map[string]any{}
+	filter["global"] = true
+
+	res := tx.Where(filter).Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	return &list, nil
+	return &list,nil
 }
 
 //=============================================================================
 
-func GetDataProductById(tx *gorm.DB, id uint) (*DataProduct, error) {
-	var list []DataProduct
+func GetDataBlockById(tx *gorm.DB, id uint) (*DataBlock, error) {
+	var list []DataBlock
 	res := tx.Find(&list, id)
 
 	if res.Error != nil {
@@ -61,37 +65,39 @@ func GetDataProductById(tx *gorm.DB, id uint) (*DataProduct, error) {
 
 //=============================================================================
 
-func AddDataProduct(tx *gorm.DB, p *DataProduct) error {
-	return tx.Create(p).Error
+//func GetAllInstrumentsByAllProductIdAsMap(tx *gorm.DB, pId uint) (map[string]*AllInstrument, error) {
+//	var list []AllInstrument
+//
+//	filter := map[string]any{}
+//	filter["all_product_id"] = pId
+//
+//	res := tx.Where(filter).Find(&list)
+//
+//	if res.Error != nil {
+//		return nil, req.NewServerErrorByError(res.Error)
+//	}
+//
+//	//--- Build a map of results
+//
+//	aiMap := make(map[string]*AllInstrument)
+//
+//	for _,ai := range list {
+//		aiMap[ai.Symbol] = &ai
+//	}
+//
+//	return aiMap, nil
+//}
+
+//=============================================================================
+
+func AddDataBlock(tx *gorm.DB, db *DataBlock) error {
+	return tx.Create(db).Error
 }
 
 //=============================================================================
 
-func DisconnectAll(tx *gorm.DB) error {
-	return tx.Model(&DataProduct{}).
-		Where("supports_multiple_data = false").
-		Update("connected", false).Error
-}
-
-//=============================================================================
-
-func SetConnectionStatus(tx *gorm.DB, user, code string, flag bool) error {
-	return tx.Model(&DataProduct{}).
-		Where("username = ? AND connection_code = ?", user, code).
-		Update("connected", flag).Error
-}
-
-//=============================================================================
-
-func UpdateDataProductFields(tx *gorm.DB, id uint, status DPStatus) error {
-	fields := map[string]interface{}{
-		"status" : status,
-	}
-
-	return tx.Model(&DataProduct{}).
-		Where("id = ?", id).
-		Updates(fields).
-		Error
+func UpdateDataBlock(tx *gorm.DB, db *DataBlock) error {
+	return tx.Save(db).Error
 }
 
 //=============================================================================
