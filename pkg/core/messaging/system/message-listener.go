@@ -26,10 +26,12 @@ package system
 
 import (
 	"encoding/json"
+	"log/slog"
+
 	"github.com/bit-fever/core/msg"
+	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"gorm.io/gorm"
-	"log/slog"
 )
 
 //=============================================================================
@@ -74,6 +76,9 @@ func handleSystemAdapterRestart() bool {
 		slog.Info("handleSystemAdapterRestart: Disconnection complete")
 	}
 
+	//--- We have to disconnect regardless of any error above
+	jobmanager.DisconnectAll()
+
 	return err == nil
 }
 
@@ -86,14 +91,15 @@ func handleConnectionChange(ccm *ConnectionChangeSystemMessage) bool {
 
 	slog.Info("handleConnectionChange: Updating connection status", "user", ccm.Username, "connectionCode", ccm.ConnectionCode, "status", ccm.Status)
 
+	connected := ccm.Status == ConnectionStatusConnected
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
-		connected := ccm.Status == ConnectionStatusConnected
 		return db.SetConnectionStatus(tx, ccm.Username, ccm.ConnectionCode, connected)
 	})
 
 	if err != nil {
 		slog.Info("handleConnectionChange: Raise an error while changing connection status", "user", ccm.Username, "connectionCode", ccm.ConnectionCode, "status", ccm.Status, "error", err.Error())
 	} else {
+		jobmanager.SetConnection(ccm.SystemCode, ccm.Username, ccm.ConnectionCode, connected)
 		slog.Info("handleConnectionChange: Connection status update complete", "user", ccm.Username, "connectionCode", ccm.ConnectionCode, "status", ccm.Status)
 	}
 

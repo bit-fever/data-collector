@@ -111,13 +111,16 @@ func (a *DataAggregator) Aggregate(daDes *DataAggregator) {
 
 func (a *DataAggregator) createInitialDataPoint(dp *DataPoint) *DataPoint {
 	return &DataPoint{
-		Time      : a.timeSlotFunc(dp.Time),
-		Open      : dp.Open,
-		High      : dp.High,
-		Low       : dp.Low,
-		Close     : dp.Close,
-		UpVolume  : dp.UpVolume,
-		DownVolume: dp.DownVolume,
+		Time        : a.timeSlotFunc(dp.Time),
+		Open        : dp.Open,
+		High        : dp.High,
+		Low         : dp.Low,
+		Close       : dp.Close,
+		UpVolume    : dp.UpVolume,
+		DownVolume  : dp.DownVolume,
+		UpTicks     : dp.UpTicks,
+		DownTicks   : dp.DownTicks,
+		OpenInterest: dp.OpenInterest,
 	}
 }
 
@@ -126,11 +129,14 @@ func (a *DataAggregator) createInitialDataPoint(dp *DataPoint) *DataPoint {
 func (a *DataAggregator) Merge(dp *DataPoint) {
 	cp := a.currDp
 
-	cp.High        = math.Max(cp.High, dp.High)
-	cp.Low         = math.Min(cp.Low,  dp.Low)
-	cp.Close       = dp.Close
-	cp.UpVolume   += dp.UpVolume
-	cp.DownVolume += dp.DownVolume
+	cp.High          = math.Max(cp.High, dp.High)
+	cp.Low           = math.Min(cp.Low,  dp.Low)
+	cp.Close         = dp.Close
+	cp.UpVolume     += dp.UpVolume
+	cp.DownVolume   += dp.DownVolume
+	cp.UpTicks      += dp.UpTicks
+	cp.DownTicks    += dp.DownTicks
+	cp.OpenInterest += dp.OpenInterest
 }
 
 //=============================================================================

@@ -65,31 +65,6 @@ func GetDataBlockById(tx *gorm.DB, id uint) (*DataBlock, error) {
 
 //=============================================================================
 
-//func GetAllInstrumentsByAllProductIdAsMap(tx *gorm.DB, pId uint) (map[string]*AllInstrument, error) {
-//	var list []AllInstrument
-//
-//	filter := map[string]any{}
-//	filter["all_product_id"] = pId
-//
-//	res := tx.Where(filter).Find(&list)
-//
-//	if res.Error != nil {
-//		return nil, req.NewServerErrorByError(res.Error)
-//	}
-//
-//	//--- Build a map of results
-//
-//	aiMap := make(map[string]*AllInstrument)
-//
-//	for _,ai := range list {
-//		aiMap[ai.Symbol] = &ai
-//	}
-//
-//	return aiMap, nil
-//}
-
-//=============================================================================
-
 func AddDataBlock(tx *gorm.DB, db *DataBlock) error {
 	return tx.Create(db).Error
 }

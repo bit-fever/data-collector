@@ -39,7 +39,7 @@ func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt,
 
 	res := tx.
 		Select("data_instrument.*, db.status, db.data_from, db.data_to, db.progress ").
-		Joins("JOIN data_block db ON db.id = data_block_id").
+		Joins("LEFT JOIN data_block db ON db.id = data_block_id").
 		Where(filter).
 		Order("symbol").
 		Find(&list)
@@ -118,30 +118,6 @@ func AddDataInstrument(tx *gorm.DB, i *DataInstrument) error {
 
 func UpdateDataInstrument(tx *gorm.DB, i *DataInstrument) error {
 	return tx.Save(i).Error
-}
-
-//=============================================================================
-
-func AddIngestionJob(tx *gorm.DB, job *IngestionJob) error {
-	return tx.Create(job).Error
-}
-
-//=============================================================================
-
-func UpdateIngestionJob(tx *gorm.DB, job *IngestionJob) error {
-	return tx.Save(job).Error
-}
-
-//=============================================================================
-
-func AddDownloadJob(tx *gorm.DB, job *DownloadJob) error {
-	return tx.Create(job).Error
-}
-
-//=============================================================================
-
-func UpdateDownloadJob(tx *gorm.DB, job *DownloadJob) error {
-	return tx.Save(job).Error
 }
 
 //=============================================================================

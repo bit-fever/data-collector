@@ -27,9 +27,10 @@ package upload
 import (
 	"bufio"
 	"errors"
-	"github.com/bit-fever/data-collector/pkg/ds"
 	"strings"
 	"time"
+
+	"github.com/bit-fever/data-collector/pkg/ds"
 )
 
 //=============================================================================
@@ -175,8 +176,8 @@ func (p *TradestationParser) createDataPoint(values []string, loc *time.Location
 						if err == nil {
 							down,err = parseInt(values[p.indexDown], Down)
 							if err == nil {
-								dp.UpVolume   = up
-								dp.DownVolume = down
+								dp.UpTicks   = up
+								dp.DownTicks = down
 								dp.Time = dp.Time.In(time.UTC)
 							}
 						}

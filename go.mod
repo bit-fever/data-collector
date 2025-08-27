@@ -3,7 +3,7 @@ module github.com/bit-fever/data-collector
 go 1.24.0
 
 require (
-	github.com/bit-fever/core v1.10.3
+	github.com/bit-fever/core v1.10.5
 	github.com/bit-fever/sick-engine v0.0.2
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-sql-driver/mysql v1.9.3 // indirect

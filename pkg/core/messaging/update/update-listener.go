@@ -29,6 +29,7 @@ import (
 	"log/slog"
 
 	"github.com/bit-fever/core/msg"
+	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"gorm.io/gorm"
 )
@@ -73,9 +74,8 @@ func HandleUpdateMessage(m *msg.Message) bool {
 func addDataProduct(dpm *DataProductMessage) bool {
 	slog.Info("addDataProduct: Data product change received", "id", dpm.DataProduct.Id)
 
+	pd  := &db.DataProduct{}
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
-		pd := &db.DataProduct{}
-
 		pd.Id                   = dpm.DataProduct.Id
 		pd.Symbol               = dpm.DataProduct.Symbol
 		pd.Username             = dpm.DataProduct.Username
@@ -98,6 +98,10 @@ func addDataProduct(dpm *DataProductMessage) bool {
 	if err != nil {
 		slog.Error("Raised error while processing message")
 	} else {
+		if !pd.SupportsMultipleData {
+			jobmanager.SetConnection(pd.SystemCode, pd.Username, pd.ConnectionCode, pd.Connected)
+		}
+
 		slog.Info("addDataProduct: Operation complete")
 	}
 

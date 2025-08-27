@@ -233,40 +233,8 @@ func setJobInError(err error, job *db.IngestionJob, block *db.DataBlock) {
 func calcAggregates(context *ParserContext) error {
 	da5m   := context.DataAggreg
 	config := context.Config
-	err := saveAggregate(da5m, config, "5m")
 
-	if err == nil {
-		da15m := ds.NewDataAggregator(ds.TimeSlotFunction15m)
-		da5m.Aggregate(da15m)
-		err = saveAggregate(da15m, config, "15m")
-		if err == nil {
-			da60m := ds.NewDataAggregator(ds.TimeSlotFunction60m)
-			da15m.Aggregate(da60m)
-			err = saveAggregate(da60m, config, "60m")
-		}
-	}
-
-	return err
-}
-
-//=============================================================================
-
-func saveAggregate(da *ds.DataAggregator, config *ds.DataConfig, timeframe string) error {
-	var dataPoints []*ds.DataPoint
-	config.Timeframe = timeframe
-
-	for _,dp := range da.DataPoints() {
-		dataPoints = append(dataPoints, dp)
-
-		if len(dataPoints) == 8192 {
-			if err := ds.SetDataPoints(dataPoints, config); err != nil {
-				return err
-			}
-			dataPoints = []*ds.DataPoint{}
-		}
-	}
-
-	return ds.SetDataPoints(dataPoints, config)
+	return ds.BuildAggregates(da5m, config)
 }
 
 //=============================================================================

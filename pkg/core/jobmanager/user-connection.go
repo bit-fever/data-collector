@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,65 +22,52 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package ds
-
-import (
-	"fmt"
-	"strconv"
-	"strings"
-	"time"
-)
+package jobmanager
 
 //=============================================================================
 
-type DataPoint struct {
-	Time         time.Time `json:"time"`
-	Open         float64   `json:"open"`
-	High         float64   `json:"high"`
-	Low          float64   `json:"low"`
-	Close        float64   `json:"close"`
-	UpVolume     int       `json:"upVolume"`
-	DownVolume   int       `json:"downVolume"`
-	UpTicks      int       `json:"upTicks"`
-	DownTicks    int       `json:"downTicks"`
-	OpenInterest int       `json:"openInterest"`
+type UserConnection struct {
+	username       string
+	connectionCode string
+	connected      bool
+	scheduledJob   *ScheduledJob
 }
 
 //=============================================================================
 
-func (dp *DataPoint) String() string {
-	var sb strings.Builder
-	sb.WriteString(dp.Time.String())
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Open))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.High))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Low))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Close))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.UpVolume))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.DownVolume))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.UpTicks))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.DownTicks))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.OpenInterest))
-
-	return sb.String()
+func (uc *UserConnection) key() string {
+	return uc.username + ":" + uc.connectionCode
 }
 
 //=============================================================================
 
-type DataConfig struct {
-	UserTable bool
-	Timeframe string
-	Selector  any
-	Symbol    string
-	Timezone  string
+func (uc *UserConnection) allocateToJob(job *ScheduledJob) {
+	uc.scheduledJob        = job
+	job.job.UserConnection = uc.key()
+}
+
+//=============================================================================
+
+func (uc *UserConnection) isAllocated() bool {
+	return uc.scheduledJob != nil
+}
+
+//=============================================================================
+
+func (uc *UserConnection) deallocate() {
+	job := uc.scheduledJob
+	job.job.UserConnection = ""
+	uc.scheduledJob        = nil
+}
+
+//=============================================================================
+
+func newUserConnection(username, connectionCode string, connected bool) *UserConnection {
+	return &UserConnection{
+		username      : username,
+		connectionCode: connectionCode,
+		connected     : connected,
+	}
 }
 
 //=============================================================================

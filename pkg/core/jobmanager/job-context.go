@@ -25,111 +25,103 @@ THE SOFTWARE.
 package jobmanager
 
 import (
-	"sync"
-
 	"github.com/bit-fever/data-collector/pkg/db"
+	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-type InventoryCache struct {
-	sync.RWMutex
-	adapters map[string]*AdapterCache
+type Job interface {
+	execute(jc *JobContext) error
 }
 
 //=============================================================================
 
-func newInventoryCache() *InventoryCache {
-	ic := InventoryCache{
-		adapters: make(map[string]*AdapterCache),
+type JobContext struct {
+	userConnection *UserConnection
+	cache          *AdapterCache
+	resuming       bool
+	sleeping       bool
+}
+
+//=============================================================================
+
+func NewJobContext(uc *UserConnection, cache *AdapterCache, resuming bool) *JobContext {
+	return &JobContext{
+		userConnection: uc,
+		cache         : cache,
+		resuming      : resuming,
 	}
-
-	return &ic
-}
-
-//=============================================================================
-//===
-//=== API methods
-//===
-//=============================================================================
-
-func (ic *InventoryCache) getDataBlock(systemCode, root, symbol string) *db.DataBlock {
-	ic.RLock()
-	ac, found := ic.adapters[systemCode]
-	ic.RUnlock()
-
-	if found {
-		return ac.getDataBlock(root, symbol)
-	}
-
-	return nil
 }
 
 //=============================================================================
 
-func (ic *InventoryCache) addDataBlock(db *db.DataBlock) {
-	ac := ic.getOrCreate(db.SystemCode)
-	ac.addDataBlock(db)
+func (jc *JobContext) GoToSleep() {
+	jc.sleeping = true
 }
 
 //=============================================================================
 
-func (ic *InventoryCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
-	ac := ic.getOrCreate(sj.block.SystemCode)
-	ac.addScheduledJob(sj,r)
-}
+func (jc *JobContext) UpdateJob(blkStatus db.DBStatus, jobStatus db.DJStatus, jobErr string) error {
+	return db.RunInTransaction(func(tx *gorm.DB) error {
+		blk := jc.userConnection.scheduledJob.block
+		job := jc.userConnection.scheduledJob.job
 
-//=============================================================================
+		blk.Status = blkStatus
+		job.Status = jobStatus
+		job.Error  = jobErr
 
-func (ic *InventoryCache) setConnection(systemCode, username, connCode string, connected bool) {
-	ac := ic.getOrCreate(systemCode)
-	ac.setConnection(username, connCode, connected)
-}
-
-//=============================================================================
-
-func (ic *InventoryCache) disconnectAll() {
-	ic.RLock()
-
-	for _,ac := range ic.adapters {
-		ac.disconnectAll()
-	}
-
-	ic.RUnlock()
-}
-
-//=============================================================================
-
-func (ic *InventoryCache) schedule(maxJobs int, e Executor) {
-	ic.RLock()
-	ic.RUnlock()
-
-	for _,ac := range ic.adapters {
-		maxJobs = ac.schedule(maxJobs, e)
-
-		if maxJobs == 0 {
-			return
+		err := db.UpdateDataBlock(tx, blk)
+		if err == nil {
+			err = db.UpdateDownloadJob(tx, job)
 		}
-	}
+
+		return err
+	})
 }
 
 //=============================================================================
-//===
-//=== Private methods
-//===
+
+func (jc *JobContext) EndJob() error {
+	err := db.RunInTransaction(func(tx *gorm.DB) error {
+		blk := jc.userConnection.scheduledJob.block
+		job := jc.userConnection.scheduledJob.job
+
+		blk.Status = db.DBStatusReady
+
+		err := db.UpdateDataBlock(tx, blk)
+		if err == nil {
+			err = db.DeleteDownloadJob(tx, job.Id)
+		}
+
+		return err
+	})
+
+	jc.cache.freeConnection(jc.userConnection,false, false)
+
+	return err
+}
+
 //=============================================================================
 
-func (ic *InventoryCache) getOrCreate(systemCode string) *AdapterCache {
-	ic.Lock()
+func (jc *JobContext) AbortJob(jobErr string) error {
+	jc.userConnection.scheduledJob.job.UserConnection = ""
+	err := jc.UpdateJob(db.DBStatusError, db.DJStatusError, jobErr)
 
-	ac, found := ic.adapters[systemCode]
-	if !found {
-		ac = NewAdapterCache(systemCode)
-		ic.adapters[systemCode] = ac
-	}
+	jc.cache.freeConnection(jc.userConnection,false, true)
 
-	ic.Unlock()
-	return ac
+	return err
+}
+
+//=============================================================================
+
+func (jc *JobContext) SleepJob() error {
+	jc.userConnection.scheduledJob.job.UserConnection = ""
+	err := jc.UpdateJob(db.DBStatusSleeping, db.DJStatusWaiting, "")
+
+	jc.cache.freeConnection(jc.userConnection,true, err != nil)
+
+	return err
 }
 
 //=============================================================================

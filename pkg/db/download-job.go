@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,65 +22,46 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package ds
+package db
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-	"time"
+	"github.com/bit-fever/core/req"
+	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-type DataPoint struct {
-	Time         time.Time `json:"time"`
-	Open         float64   `json:"open"`
-	High         float64   `json:"high"`
-	Low          float64   `json:"low"`
-	Close        float64   `json:"close"`
-	UpVolume     int       `json:"upVolume"`
-	DownVolume   int       `json:"downVolume"`
-	UpTicks      int       `json:"upTicks"`
-	DownTicks    int       `json:"downTicks"`
-	OpenInterest int       `json:"openInterest"`
+func GetActiveDownloadJobs(tx *gorm.DB) (*[]DownloadJob, error) {
+	var list []DownloadJob
+
+	res := tx.
+		Where("status = ? or status = ?", DJStatusWaiting, DJStatusRunning).
+		Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	return &list, nil
+
 }
 
 //=============================================================================
 
-func (dp *DataPoint) String() string {
-	var sb strings.Builder
-	sb.WriteString(dp.Time.String())
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Open))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.High))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Low))
-	sb.WriteString(",")
-	sb.WriteString(fmt.Sprintf("%f", dp.Close))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.UpVolume))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.DownVolume))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.UpTicks))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.DownTicks))
-	sb.WriteString(",")
-	sb.WriteString(strconv.Itoa(dp.OpenInterest))
-
-	return sb.String()
+func AddDownloadJob(tx *gorm.DB, job *DownloadJob) error {
+	return tx.Create(job).Error
 }
 
 //=============================================================================
 
-type DataConfig struct {
-	UserTable bool
-	Timeframe string
-	Selector  any
-	Symbol    string
-	Timezone  string
+func UpdateDownloadJob(tx *gorm.DB, job *DownloadJob) error {
+	return tx.Save(job).Error
+}
+
+//=============================================================================
+
+func DeleteDownloadJob(tx *gorm.DB, id uint) error {
+	return tx.Delete(&DownloadJob{}, id).Error
 }
 
 //=============================================================================

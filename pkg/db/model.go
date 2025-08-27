@@ -103,10 +103,10 @@ type DataInstrumentFull struct {
 
 type DataInstrumentExt struct {
 	DataInstrument
-	Status    DBStatus         `json:"status"`
-	DataFrom  datatype.IntDate `json:"dataFrom"`
-	DataTo    datatype.IntDate `json:"dataTo"`
-	Progress  int8             `json:"progress"`
+	Status    *DBStatus         `json:"status"`
+	DataFrom   datatype.IntDate `json:"dataFrom"`
+	DataTo     datatype.IntDate `json:"dataTo"`
+	Progress  *int8             `json:"progress"`
 }
 
 //=============================================================================
@@ -152,13 +152,28 @@ type IngestionJob struct {
 
 //=============================================================================
 
+type DJStatus int
+
+const (
+	DJStatusWaiting    DJStatus =  0
+	DJStatusRunning    DJStatus =  1
+	DJStatusEnded      DJStatus =  2
+	DJStatusError      DJStatus = -1
+)
+
+//-----------------------------------------------------------------------------
+
 type DownloadJob struct {
 	Id                uint             `json:"id" gorm:"primaryKey"`
 	DataInstrumentId  uint             `json:"dataInstrumentId"`
 	DataBlockId       uint             `json:"dataBlockId"`
+	Status            DJStatus         `json:"status"`
 	LoadFrom          datatype.IntDate `json:"loadFrom"`
 	LoadTo            datatype.IntDate `json:"loadTo"`
 	Priority          int              `json:"priority"`
+	UserConnection    string           `json:"userConnection"`
+	CurrDay           int              `json:"currDay"`
+	TotDays           int              `json:"totDays"`
 	Error             string           `json:"error"`
 }
 

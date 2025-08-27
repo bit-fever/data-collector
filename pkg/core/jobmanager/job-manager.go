@@ -25,8 +25,10 @@ THE SOFTWARE.
 package jobmanager
 
 import (
+	"errors"
 	"log/slog"
 	"os"
+	"strconv"
 
 	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/bit-fever/data-collector/pkg/db"
@@ -35,7 +37,7 @@ import (
 
 //=============================================================================
 
-var cache *InventoryCache
+var cache *InventoryCache = newInventoryCache()
 
 //=============================================================================
 
@@ -47,6 +49,8 @@ func Init(cfg *app.Config) {
 		slog.Error("Fatal: Cannot initialize Job manager. ", "error", err.Error())
 		os.Exit(1)
 	}
+
+	startScheduler()
 }
 
 //=============================================================================
@@ -55,14 +59,34 @@ func Init(cfg *app.Config) {
 //===
 //=============================================================================
 
+func NewScheduledJob(block *db.DataBlock, job *db.DownloadJob) *ScheduledJob {
+	return &ScheduledJob{block, job}
+}
+
+//=============================================================================
+
 func GetDataBlock(systemCode, root, symbol string) *db.DataBlock {
 	return cache.getDataBlock(systemCode, root, symbol)
 }
 
 //=============================================================================
 
-func AddDataBlock(block *db.DataBlock) {
-	cache.addDataBlock(block)
+func AddScheduledJobs(jobs []*ScheduledJob) {
+	for _, job := range jobs {
+		cache.addScheduledJob(job,nil)
+	}
+}
+
+//=============================================================================
+
+func SetConnection(systemCode, username, connCode string, connected bool) {
+	cache.setConnection(systemCode, username, connCode, connected)
+}
+
+//=============================================================================
+
+func DisconnectAll() {
+	cache.disconnectAll()
 }
 
 //=============================================================================
@@ -73,19 +97,87 @@ func AddDataBlock(block *db.DataBlock) {
 
 func initCache() error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
-		list,err := db.GetGlobalDataBlocks(tx)
+		blocksMap,err := loadDataBlocks(tx)
 		if err != nil {
 			return err
 		}
 
-		cache = NewInventoryCache()
+		err = loadDataProducts(tx)
+		if err != nil {
+			return err
+		}
 
-		for _,d := range *list {
-			cache.addDataBlock(&d)
+		err = loadDownloadJobs(tx, blocksMap)
+		if err != nil {
+			return err
 		}
 
 		return nil
 	})
+}
+
+//=============================================================================
+
+func loadDataBlocks(tx *gorm.DB) (map[uint]*db.DataBlock,error) {
+	list,err := db.GetGlobalDataBlocks(tx)
+	if err != nil {
+		return nil,err
+	}
+
+	for _,d := range *list {
+		cache.addDataBlock(&d)
+	}
+
+	blockMap := convertToMap(list)
+
+	return blockMap,nil
+}
+
+//=============================================================================
+
+func convertToMap(list *[]db.DataBlock) map[uint]*db.DataBlock {
+	res := make(map[uint]*db.DataBlock)
+
+	for _, b := range *list {
+		res[b.Id] = &b
+	}
+
+	return res
+}
+
+//=============================================================================
+
+func loadDataProducts(tx *gorm.DB) error {
+	filter :=map[string]any{
+		"supports_multiple_data":false,
+	}
+	products,err := db.GetDataProducts(tx, filter,0,5000)
+	if err == nil {
+		for _,dp := range *products {
+			cache.setConnection(dp.SystemCode, dp.Username, dp.ConnectionCode, dp.Connected)
+		}
+	}
+
+	return err
+}
+
+//=============================================================================
+
+func loadDownloadJobs(tx *gorm.DB, blocksMap map[uint]*db.DataBlock) error {
+	jobs,err := db.GetActiveDownloadJobs(tx)
+	if err == nil {
+		for _, job := range *jobs {
+			block,found := blocksMap[job.DataBlockId]
+			if !found {
+				return errors.New("DataBlock not found! --> id:"+ strconv.Itoa(int(job.DataBlockId)))
+			}
+
+			sj := NewScheduledJob(block, &job)
+			cache.addScheduledJob(sj,resumer)
+		}
+	}
+
+	return err
 }
 
 //=============================================================================

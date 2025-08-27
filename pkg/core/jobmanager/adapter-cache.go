@@ -25,6 +25,7 @@ THE SOFTWARE.
 package jobmanager
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/bit-fever/data-collector/pkg/db"
@@ -34,15 +35,21 @@ import (
 
 type AdapterCache struct {
 	sync.RWMutex
-	connections []string
-	productsMap map[string]*ProductCache
+	systemCode  string
+	products    map[string]*ProductCache
+	connections map[string]*UserConnection
+	waitingJobs []*ScheduledJob
+	runningJobs []*ScheduledJob
+	inErrorJobs []*ScheduledJob
 }
 
 //=============================================================================
 
-func NewAdapterCache() *AdapterCache {
+func NewAdapterCache(systemCode string) *AdapterCache {
 	return &AdapterCache{
-		productsMap: make(map[string]*ProductCache),
+		systemCode :  systemCode,
+		products   : make(map[string]*ProductCache),
+		connections: make(map[string]*UserConnection),
 	}
 }
 
@@ -54,7 +61,7 @@ func NewAdapterCache() *AdapterCache {
 
 func (ac *AdapterCache) getDataBlock(root string, symbol string) *db.DataBlock {
 	ac.RLock()
-	pc, found := ac.productsMap[root]
+	pc, found := ac.products[root]
 	ac.RUnlock()
 
 	if found {
@@ -69,14 +76,180 @@ func (ac *AdapterCache) getDataBlock(root string, symbol string) *db.DataBlock {
 func (ac *AdapterCache) addDataBlock(db *db.DataBlock) {
 	ac.Lock()
 
-	pc, found := ac.productsMap[db.Root]
+	pc, found := ac.products[db.Root]
 	if !found {
 		pc = NewProductCache(db.Root)
-		ac.productsMap[db.Root] = pc
+		ac.products[db.Root] = pc
 	}
 
 	ac.Unlock()
 	pc.addDataBlock(db)
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
+	ac.Lock()
+
+	root := sj.block.Root
+	pc, found := ac.products[root]
+	if !found {
+		pc = NewProductCache(root)
+		ac.products[root] = pc
+	}
+
+	if sj.job.Status == db.DJStatusWaiting {
+		ac.waitingJobs = append(ac.waitingJobs, sj)
+	} else if sj.job.Status == db.DJStatusRunning {
+		uc,ok := ac.connections[sj.job.UserConnection]
+		if ok {
+			if uc.connected {
+				ac.runningJobs = append(ac.runningJobs, sj)
+				uc.allocateToJob(sj)
+				//--- Resume job
+				r(ac,uc)
+			} else {
+				//--- Job was running but now the connection is down
+				sj.job.UserConnection = ""
+				ac.waitingJobs = append(ac.waitingJobs, sj)
+			}
+		} else {
+			blk := sj.block
+			slog.Error("Fatal: UserConnection not found. Discarding job", "systemCode", blk.SystemCode, "root", blk.Root, "symbol", blk.Symbol, "jobId", sj.job.Id)
+		}
+	} else if sj.job.Status == db.DJStatusError {
+		ac.inErrorJobs = append(ac.inErrorJobs, sj)
+	}
+
+	ac.Unlock()
+	pc.addDataBlock(sj.block)
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) setConnection(username, connCode string, connected bool) {
+	uc := newUserConnection(username,connCode,connected)
+
+	ac.Lock()
+
+	oldUc,found := ac.connections[uc.key()]
+	if !found {
+		ac.connections[uc.key()] = uc
+	} else {
+		//--- If we don't create new UserConnection objects we preserve pointers inside the data structure
+		oldUc.connected = connected
+	}
+
+	ac.Unlock()
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) disconnectAll() {
+	ac.RLock()
+
+	for _, uc := range ac.connections {
+		uc.connected = false
+	}
+
+	ac.RUnlock()
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) schedule(maxJobs int, e Executor) int {
+	ac.Lock()
+	defer ac.Unlock()
+
+	maxJobs = maxJobs - len(ac.runningJobs)
+
+	for _, uc := range ac.connections {
+		if maxJobs > 0 {
+			idx,job := ac.getJobToRun()
+			if !uc.isAllocated() && uc.connected && job != nil {
+				uc.allocateToJob(job)
+				if !e(ac, uc) {
+					//--- If the executor cannot start the job, let's abort the entire process
+					return 0
+				}
+
+				ac.runningJobs = append  (ac.runningJobs, job)
+				ac.waitingJobs = removeAt(ac.waitingJobs, idx)
+				maxJobs--
+			}
+		} else {
+			break
+		}
+	}
+
+	return maxJobs
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) freeConnection(uc *UserConnection, jobInSleeping bool, jobInError bool) {
+	ac.Lock()
+	defer ac.Unlock()
+
+	ac.runningJobs = removeElem(ac.runningJobs, uc.scheduledJob)
+
+	if jobInSleeping {
+		ac.waitingJobs = append(ac.waitingJobs, uc.scheduledJob)
+	}
+
+	if jobInError {
+		ac.inErrorJobs = append(ac.inErrorJobs, uc.scheduledJob)
+	}
+
+	uc.deallocate()
+}
+
+//=============================================================================
+
+func (ac *AdapterCache) getJobToRun() (int,*ScheduledJob) {
+	var job *ScheduledJob
+	var idx int
+
+	for i, sj := range ac.waitingJobs {
+		if sj.IsSchedulable() {
+			if job == nil {
+				job = sj
+				idx = i
+			} else {
+				if job.job.Priority < sj.job.Priority {
+					job = sj
+					idx = i
+				}
+			}
+		}
+	}
+
+	return idx,job
+}
+
+//=============================================================================
+//===
+//=== General methods
+//===
+//=============================================================================
+
+func removeAt(s []*ScheduledJob, i int) []*ScheduledJob {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+//=============================================================================
+
+func removeElem(s []*ScheduledJob, sj *ScheduledJob) []*ScheduledJob {
+	n := 0
+	for _, x := range s {
+		if x!=sj {
+			s[n] = x
+			n++
+		}
+	}
+
+	return s[:n]
 }
 
 //=============================================================================

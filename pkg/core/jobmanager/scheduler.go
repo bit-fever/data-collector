@@ -25,111 +25,89 @@ THE SOFTWARE.
 package jobmanager
 
 import (
-	"sync"
+	"log/slog"
+	"time"
 
 	"github.com/bit-fever/data-collector/pkg/db"
 )
 
 //=============================================================================
 
-type InventoryCache struct {
-	sync.RWMutex
-	adapters map[string]*AdapterCache
-}
+const (
+	MaxJobs = 4
+)
+
+type Executor func(ac *AdapterCache, uc *UserConnection) bool
+type Resumer  func(ac *AdapterCache, uc *UserConnection)
 
 //=============================================================================
 
-func newInventoryCache() *InventoryCache {
-	ic := InventoryCache{
-		adapters: make(map[string]*AdapterCache),
-	}
-
-	return &ic
-}
-
-//=============================================================================
-//===
-//=== API methods
-//===
-//=============================================================================
-
-func (ic *InventoryCache) getDataBlock(systemCode, root, symbol string) *db.DataBlock {
-	ic.RLock()
-	ac, found := ic.adapters[systemCode]
-	ic.RUnlock()
-
-	if found {
-		return ac.getDataBlock(root, symbol)
-	}
-
-	return nil
-}
+var ticker *time.Ticker
 
 //=============================================================================
 
-func (ic *InventoryCache) addDataBlock(db *db.DataBlock) {
-	ac := ic.getOrCreate(db.SystemCode)
-	ac.addDataBlock(db)
-}
+func startScheduler() {
+	ticker = time.NewTicker(1 * time.Second)
 
-//=============================================================================
-
-func (ic *InventoryCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
-	ac := ic.getOrCreate(sj.block.SystemCode)
-	ac.addScheduledJob(sj,r)
-}
-
-//=============================================================================
-
-func (ic *InventoryCache) setConnection(systemCode, username, connCode string, connected bool) {
-	ac := ic.getOrCreate(systemCode)
-	ac.setConnection(username, connCode, connected)
-}
-
-//=============================================================================
-
-func (ic *InventoryCache) disconnectAll() {
-	ic.RLock()
-
-	for _,ac := range ic.adapters {
-		ac.disconnectAll()
-	}
-
-	ic.RUnlock()
-}
-
-//=============================================================================
-
-func (ic *InventoryCache) schedule(maxJobs int, e Executor) {
-	ic.RLock()
-	ic.RUnlock()
-
-	for _,ac := range ic.adapters {
-		maxJobs = ac.schedule(maxJobs, e)
-
-		if maxJobs == 0 {
-			return
+	go func() {
+		for range ticker.C {
+			run()
 		}
-	}
+	}()
 }
 
 //=============================================================================
-//===
-//=== Private methods
-//===
+
+func run() {
+	cache.schedule(MaxJobs, executor)
+}
+
 //=============================================================================
 
-func (ic *InventoryCache) getOrCreate(systemCode string) *AdapterCache {
-	ic.Lock()
-
-	ac, found := ic.adapters[systemCode]
-	if !found {
-		ac = NewAdapterCache(systemCode)
-		ic.adapters[systemCode] = ac
+func executor(ac *AdapterCache, uc *UserConnection) bool {
+	jc := NewJobContext(uc, ac, false)
+	err := jc.UpdateJob(db.DBStatusLoading, db.DJStatusRunning, "")
+	if err == nil {
+		go func() {
+			runJob(jc)
+		}()
 	}
 
-	ic.Unlock()
-	return ac
+	return err == nil
+}
+
+//=============================================================================
+
+func resumer(ac *AdapterCache, uc *UserConnection) {
+	go func() {
+		//--- Let's wait some time before resuming jobs to allow the boot sequence to complete
+		time.Sleep(5 * time.Second)
+		jc := NewJobContext(uc, ac, true)
+		runJob(jc)
+	}()
+}
+
+//=============================================================================
+
+func runJob(jc *JobContext) {
+	job := &InstrumentDownLoadJob{}
+	err := job.execute(jc)
+
+	if err == nil {
+		if jc.sleeping {
+			slog.Info("DownloadJob: Job sent in sleeping status", "error", err, "jobId", jc.userConnection.scheduledJob.job.Id)
+			err = jc.SleepJob()
+		} else {
+			err = jc.EndJob()
+		}
+	} else {
+		slog.Error("DownloadJob: Encountered an error. Operation was aborted", "error", err, "jobId", jc.userConnection.scheduledJob.job.Id)
+		err = jc.AbortJob(err.Error())
+	}
+
+	if err != nil {
+		slog.Error("Fatal: Cannot end/abort/sleep a job", "jobId", jc.userConnection.scheduledJob.job.Id, "error", err)
+	}
 }
 
 //=============================================================================

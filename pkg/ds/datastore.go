@@ -27,15 +27,16 @@ package ds
 import (
 	"bufio"
 	"context"
+	"io"
+	"log/slog"
+	"os"
+	"time"
+
 	"github.com/bit-fever/core"
 	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"io"
-	"log/slog"
-	"os"
-	"time"
 )
 
 //=============================================================================
@@ -126,7 +127,7 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 
 	for rows.Next() {
 		var dp DataPoint
-		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.UpVolume, &dp.DownVolume)
+		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.UpVolume, &dp.DownVolume, &dp.UpTicks, &dp.DownTicks, &dp.OpenInterest)
 
 		if err != nil {
 			return err
@@ -157,12 +158,32 @@ func SetDataPoints(points []*DataPoint, config *DataConfig) error {
 
 	for i := range points {
 		dp := points[i]
-		batch.Queue(query, dp.Time, config.Symbol, config.Selector, dp.Open, dp.High, dp.Low, dp.Close, dp.UpVolume, dp.DownVolume)
+		batch.Queue(query, dp.Time, config.Symbol, config.Selector, dp.Open, dp.High, dp.Low, dp.Close,
+					dp.UpVolume, dp.DownVolume, dp.UpTicks, dp.DownTicks, dp.OpenInterest)
 	}
 
 	br := pool.SendBatch(context.Background(), batch)
 	_, err := br.Exec()
 	_ = br.Close()
+
+	return err
+}
+
+//=============================================================================
+
+func BuildAggregates(da5m *DataAggregator, config *DataConfig) error {
+	err := saveAggregate(da5m, config, "5m")
+
+	if err == nil {
+		da15m := NewDataAggregator(TimeSlotFunction15m)
+		da5m.Aggregate(da15m)
+		err = saveAggregate(da15m, config, "15m")
+		if err == nil {
+			da60m := NewDataAggregator(TimeSlotFunction60m)
+			da15m.Aggregate(da60m)
+			err = saveAggregate(da60m, config, "60m")
+		}
+	}
 
 	return err
 }
@@ -184,7 +205,7 @@ func buildGetQuery(config *DataConfig) string {
 
 	table = table + config.Timeframe
 
-	query := 	"SELECT time, open, high, low, close, up_volume, down_volume FROM "+ table +" "+
+	query := 	"SELECT time, open, high, low, close, up_volume, down_volume, up_ticks, down_ticks, open_interest FROM "+ table +" "+
 				"WHERE symbol = $1 AND "+ field +" = $2 AND time >= $3 AND time <= $4 "+
 				"ORDER BY time"
 
@@ -204,17 +225,40 @@ func buildAddQuery(config *DataConfig) string {
 
 	table = table + config.Timeframe
 
-	query := 	"INSERT INTO "+ table +"(time, symbol, "+ field +", open, high, low, close, up_volume, down_volume) " +
-				"VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) " +
+	query := 	"INSERT INTO "+ table +"(time, symbol, "+ field +", open, high, low, close, up_volume, down_volume, up_ticks, down_ticks, open_interest) " +
+				"VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) " +
 				"ON CONFLICT(time, symbol, "+ field +") DO UPDATE SET "+
 				"open=excluded.open,"+
 				"high=excluded.high,"+
 				"low=excluded.low,"+
 				"close=excluded.close,"+
 				"up_volume=excluded.up_volume,"+
-				"down_volume=excluded.down_volume"
+				"down_volume=excluded.down_volume,"+
+				"up_ticks=excluded.up_ticks,"+
+				"down_ticks=excluded.down_ticks,"+
+				"open_interest=excluded.open_interest"
 
 	return query
+}
+
+//=============================================================================
+
+func saveAggregate(da *DataAggregator, config *DataConfig, timeframe string) error {
+	var dataPoints []*DataPoint
+	config.Timeframe = timeframe
+
+	for _,dp := range da.DataPoints() {
+		dataPoints = append(dataPoints, dp)
+
+		if len(dataPoints) == 8192 {
+			if err := SetDataPoints(dataPoints, config); err != nil {
+				return err
+			}
+			dataPoints = []*DataPoint{}
+		}
+	}
+
+	return SetDataPoints(dataPoints, config)
 }
 
 //=============================================================================

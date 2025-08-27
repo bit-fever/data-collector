@@ -22,55 +22,20 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package jobmanager
+package db
 
-import (
-	"sync"
-
-	"github.com/bit-fever/data-collector/pkg/db"
-)
+import "gorm.io/gorm"
 
 //=============================================================================
 
-type ProductCache struct {
-	sync.RWMutex
-	root   string
-	blocks map[string]*db.DataBlock
+func AddIngestionJob(tx *gorm.DB, job *IngestionJob) error {
+	return tx.Create(job).Error
 }
 
 //=============================================================================
 
-func NewProductCache(root string) *ProductCache {
-	return &ProductCache{
-		root  : root,
-		blocks: make(map[string]*db.DataBlock),
-	}
-}
-
-//=============================================================================
-//===
-//=== API methods
-//===
-//=============================================================================
-
-func (pc *ProductCache) getDataBlock(symbol string) *db.DataBlock {
-	pc.RLock()
-	i, found := pc.blocks[symbol]
-	pc.RUnlock()
-
-	if found {
-		return i
-	}
-
-	return nil
-}
-
-//=============================================================================
-
-func (pc *ProductCache) addDataBlock(db *db.DataBlock) {
-	pc.Lock()
-	pc.blocks[db.Symbol] = db
-	pc.Unlock()
+func UpdateIngestionJob(tx *gorm.DB, job *IngestionJob) error {
+	return tx.Save(job).Error
 }
 
 //=============================================================================
