@@ -53,6 +53,29 @@ func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt,
 
 //=============================================================================
 
+func GetRollingDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt, error) {
+	var list []DataInstrumentExt
+
+	filter := map[string]any{}
+	filter["data_product_id"] = pId
+	filter["continuous"]      = 0
+
+	res := tx.
+		Select("data_instrument.*, db.status, db.data_from, db.data_to, db.progress ").
+		Joins("JOIN data_block db ON db.id = data_block_id").
+		Where(filter).
+		Order("expiration_date").
+		Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	return &list, nil
+}
+
+//=============================================================================
+
 func GetDataInstrumentsFull(tx *gorm.DB, filter map[string]any) (*[]DataInstrumentFull, error) {
 	var list []DataInstrumentFull
 

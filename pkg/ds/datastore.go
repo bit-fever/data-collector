@@ -115,6 +115,17 @@ func DeleteDataFile(filename string) error {
 //===
 //=============================================================================
 
+func NewDataConfig(systemCode, symbol, timeframe string) *DataConfig {
+	return &DataConfig{
+		UserTable: false,
+		Timeframe: timeframe,
+		Selector : systemCode,
+		Symbol   : symbol,
+	}
+}
+
+//=============================================================================
+
 func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.Location, da *DataAggregator) error {
 	query := buildGetQuery(config)
 

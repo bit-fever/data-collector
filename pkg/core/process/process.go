@@ -26,7 +26,6 @@ package process
 
 import (
 	"github.com/bit-fever/data-collector/pkg/app"
-	"github.com/bit-fever/data-collector/pkg/core/process/barloader"
 	"github.com/bit-fever/data-collector/pkg/core/process/invloader"
 )
 
@@ -34,7 +33,6 @@ import (
 
 func Init(cfg *app.Config) {
 	invloader.Init(cfg)
-	barloader.Init(cfg)
 }
 
 //=============================================================================

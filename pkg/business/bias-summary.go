@@ -25,11 +25,12 @@ THE SOFTWARE.
 package business
 
 import (
+	"time"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
-	"time"
 )
 
 //=============================================================================
@@ -38,7 +39,7 @@ type BiasSummaryResponse struct {
 	BiasAnalysis  *db.BiasAnalysis     `json:"biasAnalysis"`
 	BrokerProduct *db.BrokerProduct    `json:"brokerProduct"`
 	Result        [7]*DataPointDowList `json:"result"`
-	config        *ds.DataConfig
+	config        *DataConfig
 }
 
 //-----------------------------------------------------------------------------
@@ -116,7 +117,7 @@ func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResp
 		return nil, err
 	}
 
-	var config *ds.DataConfig
+	var config *DataConfig
 	config, err = CreateDataConfig(tx, ba.DataInstrumentId)
 	if err != nil {
 		return nil, err
@@ -142,11 +143,11 @@ func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResp
 //=============================================================================
 
 func GetBiasSummaryData(c *auth.Context, id uint, bsr *BiasSummaryResponse) error {
-	bsr.config.Timeframe = "15m"
+	bsr.config.DataConfig.Timeframe = "15m"
 
 	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m)
 	loc,_:= time.LoadLocation(bsr.config.Timezone)
-	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, bsr.config, loc, da)
+	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, &bsr.config.DataConfig, loc, da)
 
 	if err != nil {
 		return err

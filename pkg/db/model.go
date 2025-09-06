@@ -54,26 +54,28 @@ const (
 
 //-----------------------------------------------------------------------------
 
-type DPRollType int
+type DPRollTrigger string
 
 const (
-	RollTypeStandard = 0
+	DPRollTriggerSD4  = "sd4"
+	DPRollTriggerSD6  = "sd6"
+	DPRollTriggerSD30 = "sd30"
 )
 
 //-----------------------------------------------------------------------------
 
 type DataProduct struct {
-	Id                   uint       `json:"id" gorm:"primaryKey"`
-	Username             string     `json:"username"`
-	ConnectionCode       string     `json:"connectionCode"`
-	SystemCode           string     `json:"systemCode"`
-	Symbol               string     `json:"symbol"`
-	SupportsMultipleData bool       `json:"supportsMultipleData"`
-	Connected            bool       `json:"connected"`
-	Timezone             string     `json:"timezone"`
-	Status               DPStatus   `json:"status"`
-	Months               string     `json:"months"`
-	RollType             DPRollType `json:"rollType"`
+	Id                   uint          `json:"id" gorm:"primaryKey"`
+	Username             string        `json:"username"`
+	ConnectionCode       string        `json:"connectionCode"`
+	SystemCode           string        `json:"systemCode"`
+	Symbol               string        `json:"symbol"`
+	SupportsMultipleData bool          `json:"supportsMultipleData"`
+	Connected            bool          `json:"connected"`
+	Timezone             string        `json:"timezone"`
+	Status               DPStatus      `json:"status"`
+	Months               string        `json:"months"`
+	RolloverTrigger      DPRollTrigger `json:"rollTrigger"`
 }
 
 //=============================================================================
@@ -85,9 +87,10 @@ type DataInstrument struct {
 	Symbol           string    `json:"symbol"`
 	Name             string    `json:"name"`
 	ExpirationDate  *time.Time `json:"expirationDate,omitempty"`
+	RolloverDate    *time.Time `json:"rolloverDate,omitempty"`
 	Continuous       bool      `json:"continuous"`
 	Month            string    `json:"month"`
-	RollDelta        float64   `json:"rollDelta"`
+	RolloverDelta    float64   `json:"rolloverDelta"`
 }
 
 //=============================================================================
@@ -118,6 +121,7 @@ const (
 	DBStatusLoading    =  2
 	DBStatusProcessing =  3
 	DBStatusSleeping   =  4
+	DBStatusEmpty      =  5
 	DBStatusReady      =  0
 	DBStatusError      = -1
 )

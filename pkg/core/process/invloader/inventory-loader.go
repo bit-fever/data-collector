@@ -31,8 +31,10 @@ import (
 	"time"
 
 	"github.com/bit-fever/core/datatype"
+	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
+	"github.com/bit-fever/data-collector/pkg/core/messaging/rollover"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/platform"
 	"gorm.io/gorm"
@@ -41,7 +43,7 @@ import (
 //=============================================================================
 
 const (
-	DaysBack time.Duration = 365
+	DaysBack time.Duration = 180
 )
 
 //=============================================================================
@@ -121,6 +123,17 @@ func processDataProduct(dp *db.DataProduct) {
 			jobs,err = addDataInstruments(tx, dp, list)
 			if err != nil {
 				return errors.New("Cannot add new data instruments : "+ err.Error())
+			}
+
+			if len(jobs) == 0 {
+				//--- If there are no new blocks/jobs to run then the product is ready and we
+				//--- have to send a special message indicating this. If we don't send this message,
+				//--- the recalc will never be triggered
+
+				err = sendRollRecalcMessage(dp.Id)
+				if err != nil {
+					return err
+				}
 			}
 
 			return db.UpdateDataProductFields(tx, dp.Id, db.DPStatusFetchingData)
@@ -264,6 +277,22 @@ func calcLoadFrom(expDate *time.Time) datatype.IntDate {
 
 func calcLoadTo(expDate *time.Time) datatype.IntDate {
 	return datatype.ToIntDate(expDate)
+}
+
+//=============================================================================
+
+func sendRollRecalcMessage(id uint) error {
+	job := &rollover.RecalcJob{
+		DataProductId: id,
+	}
+
+	err := msg.SendMessage(msg.ExCollector, msg.SourceRollRecalcJob, msg.TypeCreate, job)
+
+	if err != nil {
+		slog.Error("sendRollRecalcJobMessage: Could not publish the upload message", "error", err.Error())
+	}
+
+	return err
 }
 
 //=============================================================================

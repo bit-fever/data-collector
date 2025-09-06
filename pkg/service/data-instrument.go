@@ -28,7 +28,6 @@ import (
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
-	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
 )
 
@@ -76,7 +75,7 @@ func getDataInstrumentById(c *auth.Context) {
 
 func getDataInstrumentData(c *auth.Context) {
 	var result *business.DataInstrumentDataResponse
-	var config *ds.DataConfig
+	var config *business.DataConfig
 
 	id, err   := c.GetIdFromUrl()
 	timeframe := c.GetParamAsString("timeframe",  "5m")
@@ -89,7 +88,7 @@ func getDataInstrumentData(c *auth.Context) {
 		})
 
 		if err == nil {
-			config.Timeframe = timeframe
+			config.DataConfig.Timeframe = timeframe
 			spec := &business.DataInstrumentDataSpec{
 				Id       : id,
 				From     : c.GetParamAsString("from",     ""),

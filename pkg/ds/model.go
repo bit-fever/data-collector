@@ -80,7 +80,6 @@ type DataConfig struct {
 	Timeframe string
 	Selector  any
 	Symbol    string
-	Timezone  string
 }
 
 //=============================================================================

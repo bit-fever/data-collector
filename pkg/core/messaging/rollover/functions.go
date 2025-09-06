@@ -22,38 +22,28 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package barloader
+package rollover
 
 import (
-	"github.com/bit-fever/data-collector/pkg/app"
 	"time"
+
+	"github.com/bit-fever/data-collector/pkg/db"
 )
 
 //=============================================================================
 
-var ticker *time.Ticker
-
-//=============================================================================
-
-func Init(cfg *app.Config) *time.Ticker {
-	ticker = time.NewTicker(10 * time.Second)
-
-	go func() {
-		for range ticker.C {
-			run()
-		}
-	}()
-
-	return ticker
+func calcRolloverDate(expirDate time.Time, rollTrigger db.DPRollTrigger) time.Time {
+	switch rollTrigger {
+		case db.DPRollTriggerSD4 : return calcRolloverDateByDays(expirDate, 4)
+		case db.DPRollTriggerSD6 : return calcRolloverDateByDays(expirDate, 6)
+		default: return calcRolloverDateByDays(expirDate, 30)
+	}
 }
 
 //=============================================================================
-//===
-//=== Data loader
-//===
-//=============================================================================
 
-func run() {
+func calcRolloverDateByDays(expirDate time.Time, days int) time.Time {
+	return expirDate.AddDate(0,0, -days)
 }
 
 //=============================================================================

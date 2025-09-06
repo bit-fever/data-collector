@@ -96,7 +96,6 @@ func storeBars(blk *db.DataBlock, bars []*platform.PriceBar) error {
 		Selector : blk.SystemCode,
 		Timeframe: "1m",
 		Symbol   : blk.Symbol,
-		Timezone : "UTC",
 	}
 
 	for _, bar := range bars {

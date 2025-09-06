@@ -22,14 +22,12 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package upload
+package file
 
 import (
-	"encoding/json"
 	"log/slog"
 	"time"
 
-	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
@@ -38,34 +36,11 @@ import (
 
 //=============================================================================
 
-func HandleUploadMessage(m *msg.Message) bool {
-
-	slog.Info("New upload message received", "source", m.Source, "type", m.Type)
-
-	if m.Source == msg.SourceUploadJob {
-		job := db.IngestionJob{}
-		err := json.Unmarshal(m.Entity, &job)
-		if err != nil {
-			slog.Error("Dropping badly formatted message!", "entity", string(m.Entity))
-			return true
-		}
-
-		if m.Type == msg.TypeCreate {
-			return uploadFile(&job)
-		}
-	}
-
-	slog.Error("Dropping message with unknown source/type!", "source", m.Source, "type", m.Type)
-	return true
-}
-
-//=============================================================================
-
-func uploadFile(job *db.IngestionJob) bool {
+func Upload(job *db.IngestionJob) bool {
 	//--- Wait 2 secs to allow the commit to complete
 	time.Sleep(time.Second *2)
 
-	slog.Info("uploadFile: Uploading data file into datastore", "filename", job.Filename)
+	slog.Info("HandleFileUpload: Uploading data file into datastore", "filename", job.Filename)
 	var context *ParserContext
 
 	block,err := setDataBlockInLoading(job)
@@ -74,12 +49,12 @@ func uploadFile(job *db.IngestionJob) bool {
 		if err == nil {
 			err = setDataBlockInProcessing(job, block, context.DataRange)
 			if err == nil {
-				slog.Info("uploadFile: Calculating aggregates", "filename", job.Filename)
+				slog.Info("HandleFileUpload: Calculating aggregates", "filename", job.Filename)
 				err = calcAggregates(context)
 				if err == nil {
 					err = setBlockInReady(block)
 					if err == nil {
-						slog.Info("uploadFile: Operation complete", "filename", job.Filename)
+						slog.Info("HandleFileUpload: Operation complete", "filename", job.Filename)
 						_=ds.DeleteDataFile(job.Filename)
 						return true
 					}
@@ -88,7 +63,7 @@ func uploadFile(job *db.IngestionJob) bool {
 		}
 	}
 
-	slog.Error("uploadFile: Raised error while processing message", "filename", job.Filename, "error", err.Error())
+	slog.Error("HandleFileUpload: Raised error while processing message", "filename", job.Filename, "error", err.Error())
 	setJobInError(err, job, block)
 	_=ds.DeleteDataFile(job.Filename)
 	return true
@@ -171,7 +146,7 @@ func retrieveLocation(timezone string) (*time.Location, error){
 //=============================================================================
 
 func retrieveConfig(id uint) (*ds.DataConfig, error) {
-	var config *ds.DataConfig
+	var config *business.DataConfig
 
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
 		cfg, err := business.CreateDataConfig(tx, id)
@@ -179,7 +154,7 @@ func retrieveConfig(id uint) (*ds.DataConfig, error) {
 		return err
 	})
 
-	return config, err
+	return &config.DataConfig, err
 }
 
 //=============================================================================

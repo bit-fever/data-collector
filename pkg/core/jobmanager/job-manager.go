@@ -60,7 +60,7 @@ func Init(cfg *app.Config) {
 //=============================================================================
 
 func NewScheduledJob(block *db.DataBlock, job *db.DownloadJob) *ScheduledJob {
-	return &ScheduledJob{block, job}
+	return &ScheduledJob{block, job, nil}
 }
 
 //=============================================================================

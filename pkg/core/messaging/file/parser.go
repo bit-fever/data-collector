@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,38 +22,50 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package jobmanager
+package file
 
 import (
-	"time"
+	"errors"
 
 	"github.com/bit-fever/core/datatype"
-	"github.com/bit-fever/data-collector/pkg/db"
 )
 
 //=============================================================================
 
-const (
-	RetryDelayHours = 12
-)
+const TradestationCode = "tsa"
+const TradestationName = "Tradestation (ASCII)"
 
 //=============================================================================
 
-type ScheduledJob struct {
-	block     *db.DataBlock
-	job       *db.DownloadJob
-	lastError *time.Time
+type DataRange struct {
+	FromDay datatype.IntDate
+	ToDay   datatype.IntDate
 }
 
 //=============================================================================
 
-func (sj *ScheduledJob) IsSchedulable() bool {
-	if sj.lastError != nil {
-		duration := time.Now().Sub(*sj.lastError) / time.Hour
-		return duration > RetryDelayHours
-	} else {
-		return sj.job.LoadFrom < datatype.Today(time.UTC)
+type Parser interface {
+	Parse(config *ParserContext) error
+}
+
+//=============================================================================
+
+func GetParsers() map[string]string {
+	var res = map[string]string{}
+
+	res[TradestationCode] = TradestationName
+
+	return res
+}
+
+//=============================================================================
+
+func NewParser(code string) (Parser, error) {
+	switch code {
+		case TradestationCode: return &TradestationParser{}, nil
 	}
+
+	return nil, errors.New("Unknown parser type : "+ code)
 }
 
 //=============================================================================

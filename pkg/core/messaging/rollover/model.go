@@ -1,6 +1,6 @@
 //=============================================================================
 /*
-Copyright © 2024 Andrea Carboni andrea.carboni71@gmail.com
+Copyright © 2025 Andrea Carboni andrea.carboni71@gmail.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,49 +22,13 @@ THE SOFTWARE.
 */
 //=============================================================================
 
-package upload
-
-import (
-	"errors"
-	"github.com/bit-fever/core/datatype"
-)
+package rollover
 
 //=============================================================================
 
-const TradestationCode = "tsa"
-const TradestationName = "Tradestation (ASCII)"
-
-//=============================================================================
-
-type DataRange struct {
-	FromDay datatype.IntDate
-	ToDay   datatype.IntDate
-}
-
-//=============================================================================
-
-type Parser interface {
-	Parse(config *ParserContext) error
-}
-
-//=============================================================================
-
-func GetParsers() map[string]string {
-	var res = map[string]string{}
-
-	res[TradestationCode] = TradestationName
-
-	return res
-}
-
-//=============================================================================
-
-func NewParser(code string) (Parser, error) {
-	switch code {
-		case TradestationCode: return &TradestationParser{}, nil
-	}
-
-	return nil, errors.New("Unknown parser type : "+ code)
+type RecalcJob struct {
+	DataProductId uint
+	DataBlockId   uint
 }
 
 //=============================================================================

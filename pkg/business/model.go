@@ -25,10 +25,11 @@ THE SOFTWARE.
 package business
 
 import (
+	"time"
+
 	"github.com/bit-fever/data-collector/pkg/core"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
-	"time"
 )
 
 //=============================================================================
@@ -61,7 +62,7 @@ type DataInstrumentDataSpec struct {
 	To        string
 	Timezone  string
 	Reduction string
-	Config    *ds.DataConfig
+	Config    *DataConfig
 }
 
 //=============================================================================
@@ -168,6 +169,13 @@ func (bc *BiasConfig) FromBiasConfig(dbc *db.BiasConfig) {
 	bc.Operation      = dbc.Operation
 	bc.GrossProfit    = dbc.GrossProfit
 	bc.NetProfit      = dbc.NetProfit
+}
+
+//=============================================================================
+
+type DataConfig struct {
+	DataConfig ds.DataConfig
+	Timezone   string
 }
 
 //=============================================================================

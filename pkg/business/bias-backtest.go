@@ -26,12 +26,13 @@ package business
 
 import (
 	"errors"
+	"time"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"github.com/bit-fever/sick-engine/session"
 	"gorm.io/gorm"
-	"time"
 )
 
 //=============================================================================
@@ -53,7 +54,7 @@ type BiasBacktestResponse struct {
 	BrokerProduct     *db.BrokerProduct    `json:"brokerProduct"`
 	Spec              *BiasBacktestSpec    `json:"spec"`
 	BacktestedConfigs []*BacktestedConfig  `json:"backtestedConfigs"`
-	config            *ds.DataConfig
+	config            *DataConfig
 }
 
 //=============================================================================
@@ -76,7 +77,7 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, spec *BiasBacktestSp
 		return nil, err2
 	}
 
-	var config *ds.DataConfig
+	var config *DataConfig
 	config, err = CreateDataConfig(tx, ba.DataInstrumentId)
 	if err != nil {
 		c.Log.Error("GetBacktestInfo: Could not create data config", "error", err.Error())
@@ -121,11 +122,11 @@ func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, spec *BiasBacktestSp
 func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 	c.Log.Info("RunBacktest: Starting backtest for bias analysis", "id", bbr.BiasAnalysis.Id)
 
-	bbr.config.Timeframe = "15m"
+	bbr.config.DataConfig.Timeframe = "15m"
 
 	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m)
 	loc,_:= time.LoadLocation(bbr.config.Timezone)
-	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, bbr.config, loc, da)
+	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, &bbr.config.DataConfig, loc, da)
 
 	if err != nil {
 		c.Log.Error("RunBacktest: Could not retrieve data points", "error", err.Error())

@@ -25,6 +25,11 @@ THE SOFTWARE.
 package jobmanager
 
 import (
+	"log/slog"
+	"time"
+
+	"github.com/bit-fever/core/msg"
+	"github.com/bit-fever/data-collector/pkg/core/messaging/rollover"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"gorm.io/gorm"
 )
@@ -89,15 +94,22 @@ func (jc *JobContext) EndJob() error {
 
 		blk.Status = db.DBStatusReady
 
+		if blk.DataFrom.IsNil() || blk.DataTo.IsNil() {
+			blk.Status = db.DBStatusEmpty
+		}
+
 		err := db.UpdateDataBlock(tx, blk)
 		if err == nil {
 			err = db.DeleteDownloadJob(tx, job.Id)
+			if err == nil {
+				err = jc.sendRollRecalcMessage()
+			}
 		}
 
 		return err
 	})
 
-	jc.cache.freeConnection(jc.userConnection,false, false)
+	jc.cache.freeConnection(jc.userConnection,false)
 
 	return err
 }
@@ -108,7 +120,10 @@ func (jc *JobContext) AbortJob(jobErr string) error {
 	jc.userConnection.scheduledJob.job.UserConnection = ""
 	err := jc.UpdateJob(db.DBStatusError, db.DJStatusError, jobErr)
 
-	jc.cache.freeConnection(jc.userConnection,false, true)
+	now := time.Now()
+	jc.userConnection.scheduledJob.lastError = &now
+
+	jc.cache.freeConnection(jc.userConnection,true)
 
 	return err
 }
@@ -118,8 +133,29 @@ func (jc *JobContext) AbortJob(jobErr string) error {
 func (jc *JobContext) SleepJob() error {
 	jc.userConnection.scheduledJob.job.UserConnection = ""
 	err := jc.UpdateJob(db.DBStatusSleeping, db.DJStatusWaiting, "")
+	if err == nil {
+		err = jc.sendRollRecalcMessage()
+	}
 
-	jc.cache.freeConnection(jc.userConnection,true, err != nil)
+	jc.cache.freeConnection(jc.userConnection,true)
+
+	return err
+}
+
+//=============================================================================
+
+func (jc *JobContext) sendRollRecalcMessage() error {
+	sj := jc.userConnection.scheduledJob
+
+	job := &rollover.RecalcJob{
+		DataBlockId: sj.block.Id,
+	}
+
+	err := msg.SendMessage(msg.ExCollector, msg.SourceRollRecalcJob, msg.TypeCreate, job)
+
+	if err != nil {
+		slog.Error("sendRollRecalcJobMessage: Could not publish the upload message", "error", err.Error())
+	}
 
 	return err
 }

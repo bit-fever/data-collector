@@ -70,16 +70,16 @@ type Exchange struct {
 //=============================================================================
 
 type DataProduct struct {
-	Id            uint          `json:"id"`
-	ConnectionId  uint          `json:"connectionId"`
-	ExchangeId    uint          `json:"exchangeId"`
-	Username      string        `json:"username"`
-	Symbol        string        `json:"symbol"`
-	Name          string        `json:"name"`
-	MarketType    string        `json:"marketType"`
-	ProductType   string        `json:"productType"`
-	Months        string        `json:"months"`
-	RollType      db.DPRollType `json:"rollType"`
+	Id              uint             `json:"id"`
+	ConnectionId    uint             `json:"connectionId"`
+	ExchangeId      uint             `json:"exchangeId"`
+	Username        string           `json:"username"`
+	Symbol          string           `json:"symbol"`
+	Name            string           `json:"name"`
+	MarketType      string           `json:"marketType"`
+	ProductType     string           `json:"productType"`
+	Months          string           `json:"months"`
+	RolloverTrigger db.DPRollTrigger `json:"rolloverTrigger"`
 }
 
 //=============================================================================

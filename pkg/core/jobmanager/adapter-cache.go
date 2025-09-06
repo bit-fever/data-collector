@@ -40,7 +40,6 @@ type AdapterCache struct {
 	connections map[string]*UserConnection
 	waitingJobs []*ScheduledJob
 	runningJobs []*ScheduledJob
-	inErrorJobs []*ScheduledJob
 }
 
 //=============================================================================
@@ -98,7 +97,7 @@ func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
 		ac.products[root] = pc
 	}
 
-	if sj.job.Status == db.DJStatusWaiting {
+	if sj.job.Status == db.DJStatusWaiting || sj.job.Status == db.DJStatusError {
 		ac.waitingJobs = append(ac.waitingJobs, sj)
 	} else if sj.job.Status == db.DJStatusRunning {
 		uc,ok := ac.connections[sj.job.UserConnection]
@@ -117,8 +116,6 @@ func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
 			blk := sj.block
 			slog.Error("Fatal: UserConnection not found. Discarding job", "systemCode", blk.SystemCode, "root", blk.Root, "symbol", blk.Symbol, "jobId", sj.job.Id)
 		}
-	} else if sj.job.Status == db.DJStatusError {
-		ac.inErrorJobs = append(ac.inErrorJobs, sj)
 	}
 
 	ac.Unlock()
@@ -165,17 +162,20 @@ func (ac *AdapterCache) schedule(maxJobs int, e Executor) int {
 
 	for _, uc := range ac.connections {
 		if maxJobs > 0 {
-			idx,job := ac.getJobToRun()
-			if !uc.isAllocated() && uc.connected && job != nil {
-				uc.allocateToJob(job)
-				if !e(ac, uc) {
-					//--- If the executor cannot start the job, let's abort the entire process
-					return 0
-				}
+			if !uc.isAllocated() && uc.connected {
+				idx,job := ac.getJobToRun()
+				if job != nil {
+					uc.allocateToJob(job)
+					if !e(ac, uc) {
+						//--- If the executor cannot start the job, let's abort the entire process
+						return 0
+					}
 
-				ac.runningJobs = append  (ac.runningJobs, job)
-				ac.waitingJobs = removeAt(ac.waitingJobs, idx)
-				maxJobs--
+					ac.runningJobs = append  (ac.runningJobs, job)
+					ac.waitingJobs = removeAt(ac.waitingJobs, idx)
+					job.lastError  = nil
+					maxJobs--
+				}
 			}
 		} else {
 			break
@@ -187,18 +187,14 @@ func (ac *AdapterCache) schedule(maxJobs int, e Executor) int {
 
 //=============================================================================
 
-func (ac *AdapterCache) freeConnection(uc *UserConnection, jobInSleeping bool, jobInError bool) {
+func (ac *AdapterCache) freeConnection(uc *UserConnection, enqueue bool) {
 	ac.Lock()
 	defer ac.Unlock()
 
 	ac.runningJobs = removeElem(ac.runningJobs, uc.scheduledJob)
 
-	if jobInSleeping {
+	if enqueue {
 		ac.waitingJobs = append(ac.waitingJobs, uc.scheduledJob)
-	}
-
-	if jobInError {
-		ac.inErrorJobs = append(ac.inErrorJobs, uc.scheduledJob)
 	}
 
 	uc.deallocate()
@@ -211,6 +207,7 @@ func (ac *AdapterCache) getJobToRun() (int,*ScheduledJob) {
 	var idx int
 
 	for i, sj := range ac.waitingJobs {
+		//slog.Info("---> i:"+strconv.Itoa(i)+", id:"+strconv.Itoa(int(sj.job.Id))+", p:"+strconv.Itoa(sj.job.Priority))
 		if sj.IsSchedulable() {
 			if job == nil {
 				job = sj

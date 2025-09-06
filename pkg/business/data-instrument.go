@@ -26,13 +26,14 @@ package business
 
 import (
 	"errors"
+	"math"
+	"strconv"
+	"time"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
-	"math"
-	"strconv"
-	"time"
 )
 
 //=============================================================================
@@ -51,7 +52,7 @@ func GetDataInstruments(tx *gorm.DB, c *auth.Context) (*[]db.DataInstrumentFull,
 
 //=============================================================================
 
-func CreateDataConfig(tx *gorm.DB, id uint) (*ds.DataConfig, error) {
+func CreateDataConfig(tx *gorm.DB, id uint) (*DataConfig, error) {
 	var p *db.DataProduct
 
 	i, err := db.GetDataInstrumentById(tx, id)
@@ -95,7 +96,7 @@ func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*D
 	}
 
 	start := time.Now()
-	err    = ds.GetDataPoints(params.From, params.To, spec.Config, params.Location, params.Aggregator)
+	err    = ds.GetDataPoints(params.From, params.To, &spec.Config.DataConfig, params.Location, params.Aggregator)
 	dur   := time.Now().Sub(start).Seconds()
 	if err != nil {
 		return nil, err
@@ -110,10 +111,10 @@ func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*D
 
 	return &DataInstrumentDataResponse{
 		Id         : spec.Id,
-		Symbol     : spec.Config.Symbol,
+		Symbol     : spec.Config.DataConfig.Symbol,
 		From       : params.From.Format(time.DateTime),
 		To         : params.To.Format(time.DateTime),
-		Timeframe  : spec.Config.Timeframe,
+		Timeframe  : spec.Config.DataConfig.Timeframe,
 		Timezone   : params.Location.String(),
 		Reduction  : params.Reduction,
 		Reduced    : reduced,
@@ -128,7 +129,7 @@ func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*D
 //===
 //=============================================================================
 
-func createConfig(i *db.DataInstrument, p *db.DataProduct) *ds.DataConfig {
+func createConfig(i *db.DataInstrument, p *db.DataProduct) *DataConfig {
 	var selector  any
 	var userTable bool
 
@@ -140,12 +141,14 @@ func createConfig(i *db.DataInstrument, p *db.DataProduct) *ds.DataConfig {
 		selector  = p.SystemCode
 	}
 
-	return &ds.DataConfig{
-		UserTable: userTable,
-		Timeframe: "1m",
-		Selector : selector,
-		Symbol   : i.Symbol,
-		Timezone : p.Timezone,
+	return &DataConfig{
+		DataConfig: ds.DataConfig{
+			UserTable: userTable,
+			Timeframe: "1m",
+			Selector : selector,
+			Symbol   : i.Symbol,
+		},
+		Timezone: p.Timezone,
 	}
 }
 
@@ -168,9 +171,9 @@ func parseInstrumentDataParams(spec *DataInstrumentDataSpec) (*DataInstrumentDat
 		return nil, errors.New("Bad 'to' parameter: "+ spec.To +" ("+ err2.Error() +")")
 	}
 
-	da, err3 := buildDataAggregator(spec.Config)
+	da, err3 := buildDataAggregator(&spec.Config.DataConfig)
 	if err3 != nil {
-		return nil, errors.New("Bad timeframe: "+ spec.Config.Timeframe +" ("+ err3.Error() +")")
+		return nil, errors.New("Bad timeframe: "+ spec.Config.DataConfig.Timeframe +" ("+ err3.Error() +")")
 	}
 
 	red, err := parseReduction(spec.Reduction)
@@ -190,7 +193,7 @@ func parseInstrumentDataParams(spec *DataInstrumentDataSpec) (*DataInstrumentDat
 
 //=============================================================================
 
-func getLocation(timezone string, config *ds.DataConfig) (*time.Location, error) {
+func getLocation(timezone string, config *DataConfig) (*time.Location, error) {
 	if timezone == "exchange" {
 		timezone = config.Timezone
 	}

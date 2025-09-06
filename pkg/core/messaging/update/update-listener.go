@@ -38,13 +38,13 @@ import (
 
 func HandleUpdateMessage(m *msg.Message) bool {
 
-	slog.Info("New message received", "source", m.Source,  "type", m.Type)
+	slog.Info("HandleUpdateMessage: New message received", "source", m.Source,  "type", m.Type)
 
 	if m.Source == msg.SourceDataProduct {
 		dpm := DataProductMessage{}
 		err := json.Unmarshal(m.Entity, &dpm)
 		if err != nil {
-			slog.Error("Dropping badly data formatted message (DataProduct)!", "entity", string(m.Entity))
+			slog.Error("HandleUpdateMessage: Dropping badly data formatted message (DataProduct)!", "entity", string(m.Entity))
 			return true
 		}
 
@@ -56,16 +56,19 @@ func HandleUpdateMessage(m *msg.Message) bool {
 		bpm := BrokerProductMessage{}
 		err := json.Unmarshal(m.Entity, &bpm)
 		if err != nil {
-			slog.Error("Dropping badly formatted message (BrokerProduct)!", "entity", string(m.Entity))
+			slog.Error("HandleUpdateMessage: Dropping badly formatted message (BrokerProduct)!", "entity", string(m.Entity))
 			return true
 		}
 
 		if m.Type == msg.TypeCreate || m.Type == msg.TypeUpdate {
 			return setBrokerProduct(&bpm)
 		}
+	} else if m.Source == msg.SourceTradingSystem {
+		//--- We don't care
+		return true
 	}
 
-	slog.Error("Dropping message with unknown source/type!", "source", m.Source, "type", m.Type)
+	slog.Error("HandleUpdateMessage: Dropping message with unknown source/type!", "source", m.Source, "type", m.Type)
 	return true
 }
 
@@ -85,7 +88,7 @@ func addDataProduct(dpm *DataProductMessage) bool {
 		pd.SupportsMultipleData = dpm.Connection.SupportsMultipleData
 		pd.Timezone             = dpm.Exchange.Timezone
 		pd.Months               = dpm.DataProduct.Months
-		pd.RollType             = dpm.DataProduct.RollType
+		pd.RolloverTrigger      = dpm.DataProduct.RolloverTrigger
 		pd.Status               = db.DPStatusReady
 
 		if !pd.SupportsMultipleData {
