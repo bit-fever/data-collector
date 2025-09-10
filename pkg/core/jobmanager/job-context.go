@@ -67,10 +67,13 @@ func (jc *JobContext) GoToSleep() {
 
 //=============================================================================
 
-func (jc *JobContext) UpdateJob(blkStatus db.DBStatus, jobStatus db.DJStatus, jobErr string) error {
+func (jc *JobContext) UpdateJob(blkStatus db.DBStatus, jobStatus db.DJStatus, jobErr string, sendRecalcMsg bool) error {
 	return db.RunInTransaction(func(tx *gorm.DB) error {
 		blk := jc.userConnection.scheduledJob.block
 		job := jc.userConnection.scheduledJob.job
+
+		oldBlkStatus := blk.Status
+		oldJobStatus := job.Status
 
 		blk.Status = blkStatus
 		job.Status = jobStatus
@@ -79,6 +82,14 @@ func (jc *JobContext) UpdateJob(blkStatus db.DBStatus, jobStatus db.DJStatus, jo
 		err := db.UpdateDataBlock(tx, blk)
 		if err == nil {
 			err = db.UpdateDownloadJob(tx, job)
+			if err == nil && sendRecalcMsg {
+				err = jc.sendRollRecalcMessage()
+			}
+		}
+
+		if err != nil {
+			blk.Status = oldBlkStatus
+			job.Status = oldJobStatus
 		}
 
 		return err
@@ -91,6 +102,8 @@ func (jc *JobContext) EndJob() error {
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
 		blk := jc.userConnection.scheduledJob.block
 		job := jc.userConnection.scheduledJob.job
+
+		oldBlk := *blk
 
 		blk.Status = db.DBStatusReady
 
@@ -106,10 +119,17 @@ func (jc *JobContext) EndJob() error {
 			}
 		}
 
+		if err != nil {
+			blk.Status   = oldBlk.Status
+			blk.DataFrom = oldBlk.DataFrom
+			blk.DataTo   = oldBlk.DataTo
+			job.UserConnection = ""
+		}
+
 		return err
 	})
 
-	jc.cache.freeConnection(jc.userConnection,false)
+	jc.cache.freeConnection(jc.userConnection, err != nil)
 
 	return err
 }
@@ -118,7 +138,7 @@ func (jc *JobContext) EndJob() error {
 
 func (jc *JobContext) AbortJob(jobErr string) error {
 	jc.userConnection.scheduledJob.job.UserConnection = ""
-	err := jc.UpdateJob(db.DBStatusError, db.DJStatusError, jobErr)
+	err := jc.UpdateJob(db.DBStatusError, db.DJStatusError, jobErr, false)
 
 	now := time.Now()
 	jc.userConnection.scheduledJob.lastError = &now
@@ -132,10 +152,7 @@ func (jc *JobContext) AbortJob(jobErr string) error {
 
 func (jc *JobContext) SleepJob() error {
 	jc.userConnection.scheduledJob.job.UserConnection = ""
-	err := jc.UpdateJob(db.DBStatusSleeping, db.DJStatusWaiting, "")
-	if err == nil {
-		err = jc.sendRollRecalcMessage()
-	}
+	err := jc.UpdateJob(db.DBStatusSleeping, db.DJStatusWaiting, "", true)
 
 	jc.cache.freeConnection(jc.userConnection,true)
 

@@ -31,19 +31,16 @@ import (
 
 //=============================================================================
 
-func GetActiveDownloadJobs(tx *gorm.DB) (*[]DownloadJob, error) {
+func GetDownloadJobs(tx *gorm.DB) (*[]DownloadJob, error) {
 	var list []DownloadJob
 
-	res := tx.
-		Where("status = ? or status = ?", DJStatusWaiting, DJStatusRunning).
-		Find(&list)
+	res := tx.Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)
 	}
 
 	return &list, nil
-
 }
 
 //=============================================================================

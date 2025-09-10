@@ -65,6 +65,19 @@ func Init(cfg *app.Config) *time.Ticker {
 }
 
 //=============================================================================
+
+func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock) *db.DownloadJob {
+	return &db.DownloadJob{
+		DataInstrumentId: di.Id,
+		DataBlockId     : blk.Id,
+		LoadFrom        : calcLoadFrom(di.ExpirationDate),
+		LoadTo          : calcLoadTo(di.ExpirationDate),
+		CurrDay         : 0,
+		TotDays         : int(DaysBack),
+	}
+}
+
+//=============================================================================
 //===
 //=== Inventory loader
 //===
@@ -248,15 +261,7 @@ func getOrCreateDataBlock(tx *gorm.DB, dp *db.DataProduct, di *db.DataInstrument
 //=============================================================================
 
 func addDownloadJob(tx *gorm.DB, block *db.DataBlock, di *db.DataInstrument) (*jobmanager.ScheduledJob,error) {
-	job := &db.DownloadJob{
-		DataInstrumentId: di.Id,
-		DataBlockId     : block.Id,
-		LoadFrom        : calcLoadFrom(di.ExpirationDate),
-		LoadTo          : calcLoadTo(di.ExpirationDate),
-		CurrDay         : 0,
-		TotDays         : int(DaysBack),
-	}
-
+	job := CreateDownloadJob(di, block)
 	err := db.AddDownloadJob(tx, job)
 	if err != nil {
 		return nil,err

@@ -25,7 +25,6 @@ THE SOFTWARE.
 package jobmanager
 
 import (
-	"log/slog"
 	"sync"
 
 	"github.com/bit-fever/data-collector/pkg/db"
@@ -87,7 +86,7 @@ func (ac *AdapterCache) addDataBlock(db *db.DataBlock) {
 
 //=============================================================================
 
-func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
+func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob) {
 	ac.Lock()
 
 	root := sj.block.Root
@@ -97,26 +96,8 @@ func (ac *AdapterCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
 		ac.products[root] = pc
 	}
 
-	if sj.job.Status == db.DJStatusWaiting || sj.job.Status == db.DJStatusError {
-		ac.waitingJobs = append(ac.waitingJobs, sj)
-	} else if sj.job.Status == db.DJStatusRunning {
-		uc,ok := ac.connections[sj.job.UserConnection]
-		if ok {
-			if uc.connected {
-				ac.runningJobs = append(ac.runningJobs, sj)
-				uc.allocateToJob(sj)
-				//--- Resume job
-				r(ac,uc)
-			} else {
-				//--- Job was running but now the connection is down
-				sj.job.UserConnection = ""
-				ac.waitingJobs = append(ac.waitingJobs, sj)
-			}
-		} else {
-			blk := sj.block
-			slog.Error("Fatal: UserConnection not found. Discarding job", "systemCode", blk.SystemCode, "root", blk.Root, "symbol", blk.Symbol, "jobId", sj.job.Id)
-		}
-	}
+	sj.job.UserConnection = ""
+	ac.waitingJobs = append(ac.waitingJobs, sj)
 
 	ac.Unlock()
 	pc.addDataBlock(sj.block)
@@ -203,25 +184,30 @@ func (ac *AdapterCache) freeConnection(uc *UserConnection, enqueue bool) {
 //=============================================================================
 
 func (ac *AdapterCache) getJobToRun() (int,*ScheduledJob) {
-	var job *ScheduledJob
+	var bestSj *ScheduledJob
 	var idx int
 
 	for i, sj := range ac.waitingJobs {
-		//slog.Info("---> i:"+strconv.Itoa(i)+", id:"+strconv.Itoa(int(sj.job.Id))+", p:"+strconv.Itoa(sj.job.Priority))
 		if sj.IsSchedulable() {
-			if job == nil {
-				job = sj
+			if bestSj == nil {
+				bestSj = sj
 				idx = i
 			} else {
-				if job.job.Priority < sj.job.Priority {
-					job = sj
+				if bestSj.job.Priority < sj.job.Priority {
+					bestSj = sj
 					idx = i
+				} else if bestSj.job.Priority == sj.job.Priority {
+					//--- Give precedence to jobs that were near completion
+					if bestSj.job.CurrDay < sj.job.CurrDay {
+						bestSj = sj
+						idx = i
+					}
 				}
 			}
 		}
 	}
 
-	return idx,job
+	return idx,bestSj
 }
 
 //=============================================================================

@@ -161,7 +161,6 @@ type DJStatus int
 const (
 	DJStatusWaiting    DJStatus =  0
 	DJStatusRunning    DJStatus =  1
-	DJStatusEnded      DJStatus =  2
 	DJStatusError      DJStatus = -1
 )
 

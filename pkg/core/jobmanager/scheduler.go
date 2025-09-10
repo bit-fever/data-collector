@@ -66,7 +66,7 @@ func run() {
 
 func executor(ac *AdapterCache, uc *UserConnection) bool {
 	jc := NewJobContext(uc, ac, false)
-	err := jc.UpdateJob(db.DBStatusLoading, db.DJStatusRunning, "")
+	err := jc.UpdateJob(db.DBStatusLoading, db.DJStatusRunning, "", false)
 	if err == nil {
 		go func() {
 			runJob(jc)
@@ -74,17 +74,6 @@ func executor(ac *AdapterCache, uc *UserConnection) bool {
 	}
 
 	return err == nil
-}
-
-//=============================================================================
-
-func resumer(ac *AdapterCache, uc *UserConnection) {
-	go func() {
-		//--- Let's wait some time before resuming jobs to allow the boot sequence to complete
-		time.Sleep(5 * time.Second)
-		jc := NewJobContext(uc, ac, true)
-		runJob(jc)
-	}()
 }
 
 //=============================================================================
@@ -106,7 +95,13 @@ func runJob(jc *JobContext) {
 	}
 
 	if err != nil {
-		slog.Error("Fatal: Cannot end/abort/sleep a job", "jobId", jc.userConnection.scheduledJob.job.Id, "error", err)
+		var jobId uint = 0
+		sj := jc.userConnection.scheduledJob
+		if sj != nil {
+			jobId = sj.job.Id
+		}
+
+		slog.Error("DownloadJob: Cannot end/abort/sleep a job. It will be restarted", "jobId", jobId, "error", err)
 	}
 }
 

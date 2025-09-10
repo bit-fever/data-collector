@@ -25,23 +25,28 @@ THE SOFTWARE.
 package db
 
 import (
+	"fmt"
+
 	"github.com/bit-fever/core/req"
 	"gorm.io/gorm"
 )
 
 //=============================================================================
 
-func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt, error) {
+func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint, stored bool) (*[]DataInstrumentExt, error) {
 	var list []DataInstrumentExt
 
-	filter := map[string]any{}
-	filter["data_product_id"] = pId
+	filter := fmt.Sprintf("data_product_id = %d", pId)
+
+	if stored {
+		filter = filter +" AND status IS NOT NULL"
+	}
 
 	res := tx.
 		Select("data_instrument.*, db.status, db.data_from, db.data_to, db.progress ").
 		Joins("LEFT JOIN data_block db ON db.id = data_block_id").
 		Where(filter).
-		Order("symbol").
+		Order("expiration_date").
 		Find(&list)
 
 	if res.Error != nil {

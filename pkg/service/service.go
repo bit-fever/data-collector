@@ -25,12 +25,13 @@ THE SOFTWARE.
 package service
 
 import (
+	"log/slog"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/core/auth/roles"
 	"github.com/bit-fever/core/req"
 	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/gin-gonic/gin"
-	"log/slog"
 )
 
 //=============================================================================
@@ -44,6 +45,7 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 	router.GET ("/api/collector/v1/data-instruments",                   ctrl.Secure(getDataInstruments,            roles.Admin_User_Service))
 	router.GET ("/api/collector/v1/data-instruments/:id",               ctrl.Secure(getDataInstrumentById,         roles.Admin_User_Service))
 	router.GET ("/api/collector/v1/data-instruments/:id/data",          ctrl.Secure(getDataInstrumentData,         roles.Admin_User_Service))
+	router.POST("/api/collector/v1/data-instruments/:id/reload",        ctrl.Secure(reloadDataInstrumentData,      roles.Admin_User_Service))
 
 	router.GET ("/api/collector/v1/data-products/:id/instruments",      ctrl.Secure(getDataInstrumentsByProductId, roles.Admin_User_Service))
 	router.POST("/api/collector/v1/data-products/:id/instruments",      ctrl.Secure(uploadDataInstrumentData,      roles.Admin_User_Service))

@@ -112,6 +112,10 @@ func recalcForProduct(id uint) bool {
 		}
 
 		err = updateRolledInstruments(updated)
+
+		if err == nil && dp.Status != db.DBStatusReady {
+			err = recalcProductStatus(dp, instruments)
+		}
 	}
 
 	slog.Info("recalcForProduct: Ending rollover recalc", "dpId", id, "error", err)
@@ -272,6 +276,36 @@ func setFakeRolloverDate(die *db.DataInstrumentExt, dp *db.DataProduct) bool {
 	die.RolloverDate  = &rollDate
 	die.RolloverDelta = 0
 	return true
+}
+
+//=============================================================================
+
+func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt) error {
+	for _, die := range *instruments {
+		status := *die.Status
+		if status != db.DBStatusReady && status != db.DBStatusEmpty && status != db.DBStatusSleeping {
+			return nil
+		}
+
+		if status == db.DBStatusSleeping {
+			break
+		}
+	}
+
+	dp.Status = db.DPStatusReady
+
+	err := db.RunInTransaction(func(tx *gorm.DB) error {
+		return db.UpdateDataProductFields(tx, dp.Id, dp.Status)
+	})
+
+	if err != nil {
+		slog.Error("recalcProductStatus: Failed to set data product status", "error", err)
+	} else {
+		//TODO: send event
+		slog.Info("recalcProductStatus: Data product is ready", "dpId", dp.Id, "root", dp.Symbol)
+	}
+
+	return err
 }
 
 //=============================================================================

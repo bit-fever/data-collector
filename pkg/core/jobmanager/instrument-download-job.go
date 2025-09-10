@@ -136,9 +136,9 @@ func updateStatus(jc *JobContext, blk *db.DataBlock, job *db.DownloadJob) error 
 		blk.DataTo = job.LoadFrom
 	}
 
-	blk.Progress = int8(job.CurrDay * 100 / job.TotDays)
+	blk.Progress = min(int8(job.CurrDay * 100 / job.TotDays), 100)
 
-	return jc.UpdateJob(db.DBStatusLoading, db.DJStatusRunning, "")
+	return jc.UpdateJob(db.DBStatusLoading, db.DJStatusRunning, "", false)
 }
 
 //=============================================================================

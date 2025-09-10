@@ -27,6 +27,7 @@ package service
 import (
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/business"
+	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"gorm.io/gorm"
 )
@@ -53,11 +54,13 @@ func getDataInstrumentById(c *auth.Context) {
 	id, err := c.GetIdFromUrl()
 
 	if err == nil {
-		details, err := c.GetParamAsBool("details", false)
+		var details bool
+		details, err = c.GetParamAsBool("details", false)
 
 		if err == nil {
 			err = db.RunInTransaction(func(tx *gorm.DB) error {
-				di, err := business.GetDataInstrumentById(tx, c, id, details)
+				var di *business.DataInstrumentExt
+				di, err = business.GetDataInstrumentById(tx, c, id, details)
 
 				if err != nil {
 					return err
@@ -102,6 +105,28 @@ func getDataInstrumentData(c *auth.Context) {
 				_=c.ReturnObject(result)
 				return
 			}
+		}
+	}
+
+	c.ReturnError(err)
+}
+
+//=============================================================================
+
+func reloadDataInstrumentData(c *auth.Context) {
+	id,err := c.GetIdFromUrl()
+
+	if err == nil {
+		var job *db.DownloadJob
+		var blk *db.DataBlock
+		err = db.RunInTransaction(func(tx *gorm.DB) error {
+			job,blk,err = business.ReloadDataInstrumentData(tx, c, id)
+			return err
+		})
+
+		if err == nil {
+			sj := jobmanager.NewScheduledJob(blk, job)
+			jobmanager.AddScheduledJob(sj)
 		}
 	}
 

@@ -74,9 +74,9 @@ func (ic *InventoryCache) addDataBlock(db *db.DataBlock) {
 
 //=============================================================================
 
-func (ic *InventoryCache) addScheduledJob(sj *ScheduledJob, r Resumer) {
+func (ic *InventoryCache) addScheduledJob(sj *ScheduledJob) {
 	ac := ic.getOrCreate(sj.block.SystemCode)
-	ac.addScheduledJob(sj,r)
+	ac.addScheduledJob(sj)
 }
 
 //=============================================================================

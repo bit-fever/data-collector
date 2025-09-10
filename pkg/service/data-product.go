@@ -26,14 +26,15 @@ package service
 
 import (
 	"encoding/json"
+	"io"
+	"mime/multipart"
+	"time"
+
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/data-collector/pkg/business"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
-	"io"
-	"mime/multipart"
-	"time"
 )
 
 //=============================================================================
@@ -42,15 +43,19 @@ func getDataInstrumentsByProductId(c *auth.Context) {
 	pId, err := c.GetIdFromUrl()
 
 	if err == nil {
-		err = db.RunInTransaction(func(tx *gorm.DB) error {
-			list, err := business.GetDataInstrumentsByProductId(tx, c, pId)
+		var stored bool
+		stored, err = c.GetParamAsBool("stored", false)
+		if err == nil {
+			err = db.RunInTransaction(func(tx *gorm.DB) error {
+				list, err := business.GetDataInstrumentsByProductId(tx, c, pId, stored)
 
-			if err != nil {
-				return err
-			}
+				if err != nil {
+					return err
+				}
 
-			return c.ReturnList(list, 0, len(*list), len(*list))
-		})
+				return c.ReturnList(list, 0, len(*list), len(*list))
+			})
+		}
 	}
 
 	c.ReturnError(err)

@@ -71,9 +71,15 @@ func GetDataBlock(systemCode, root, symbol string) *db.DataBlock {
 
 //=============================================================================
 
+func AddScheduledJob(job *ScheduledJob) {
+	cache.addScheduledJob(job)
+}
+
+//=============================================================================
+
 func AddScheduledJobs(jobs []*ScheduledJob) {
 	for _, job := range jobs {
-		cache.addScheduledJob(job,nil)
+		cache.addScheduledJob(job)
 	}
 }
 
@@ -124,8 +130,16 @@ func loadDataBlocks(tx *gorm.DB) (map[uint]*db.DataBlock,error) {
 		return nil,err
 	}
 
-	for _,d := range *list {
-		cache.addDataBlock(&d)
+	for _,blk := range *list {
+		cache.addDataBlock(&blk)
+
+		if blk.Status == db.DBStatusLoading || blk.Status == db.DBStatusProcessing {
+			blk.Status = db.DBStatusWaiting
+			err = db.UpdateDataBlock(tx, &blk)
+			if err != nil {
+				return nil,err
+			}
+		}
 	}
 
 	blockMap := convertToMap(list)
@@ -164,7 +178,7 @@ func loadDataProducts(tx *gorm.DB) error {
 //=============================================================================
 
 func loadDownloadJobs(tx *gorm.DB, blocksMap map[uint]*db.DataBlock) error {
-	jobs,err := db.GetActiveDownloadJobs(tx)
+	jobs,err := db.GetDownloadJobs(tx)
 	if err == nil {
 		for _, job := range *jobs {
 			block,found := blocksMap[job.DataBlockId]
@@ -173,7 +187,15 @@ func loadDownloadJobs(tx *gorm.DB, blocksMap map[uint]*db.DataBlock) error {
 			}
 
 			sj := NewScheduledJob(block, &job)
-			cache.addScheduledJob(sj,resumer)
+			cache.addScheduledJob(sj)
+
+			if job.Status == db.DJStatusRunning {
+				job.Status = db.DJStatusWaiting
+				err = db.UpdateDownloadJob(tx, &job)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 

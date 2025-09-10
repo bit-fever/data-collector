@@ -3,14 +3,14 @@ module github.com/bit-fever/data-collector
 go 1.24.0
 
 require (
-	github.com/bit-fever/core v1.10.7
+	github.com/bit-fever/core v1.10.8
 	github.com/bit-fever/sick-engine v0.0.2
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
-	github.com/jackc/pgx/v5 v5.7.5
+	github.com/jackc/pgx/v5 v5.7.6
 	github.com/spf13/viper v1.20.1 // indirect
 	gorm.io/driver/mysql v1.6.0
-	gorm.io/gorm v1.30.2
+	gorm.io/gorm v1.30.5
 )
 
 require github.com/google/uuid v1.6.0

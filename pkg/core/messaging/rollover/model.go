@@ -29,6 +29,7 @@ package rollover
 type RecalcJob struct {
 	DataProductId uint
 	DataBlockId   uint
+	ForceRecalc   bool
 }
 
 //=============================================================================

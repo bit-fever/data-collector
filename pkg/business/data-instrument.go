@@ -31,6 +31,8 @@ import (
 	"time"
 
 	"github.com/bit-fever/core/auth"
+	"github.com/bit-fever/core/req"
+	"github.com/bit-fever/data-collector/pkg/core/process/invloader"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
@@ -121,6 +123,46 @@ func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*D
 		Records    : len(dataPoints),
 		DataPoints : dataPoints,
 	}, nil
+}
+
+//=============================================================================
+
+func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.DownloadJob, *db.DataBlock, error) {
+	di,err := db.GetDataInstrumentById(tx, id)
+	if err != nil {
+		return nil,nil,req.NewServerErrorByError(err)
+	}
+	if di == nil {
+		return nil,nil,req.NewNotFoundError("Data instrument was not found. Id=", id)
+	}
+
+	var blk *db.DataBlock
+	blk,err = db.GetDataBlockById(tx, *di.DataBlockId)
+	if err != nil {
+		return nil,nil,req.NewServerErrorByError(err)
+	}
+	if blk == nil {
+		return nil,nil,req.NewNotFoundError("Data block was not found. Id=", id)
+	}
+
+	if blk.Status != db.DBStatusEmpty && blk.Status != db.DBStatusReady {
+		return nil,nil,req.NewBadRequestError("Data instrument must be READY or EMPTY. Id=", id)
+	}
+
+
+	blk.Status   = db.DBStatusWaiting
+	blk.DataFrom = 0
+	blk.DataTo   = 0
+	blk.Progress = 0
+
+	err = db.UpdateDataBlock(tx, blk)
+	if err != nil {
+		return nil,nil,req.NewServerErrorByError(err)
+	}
+
+	job := invloader.CreateDownloadJob(di, blk)
+
+	return job, blk, db.AddDownloadJob(tx, job)
 }
 
 //=============================================================================
