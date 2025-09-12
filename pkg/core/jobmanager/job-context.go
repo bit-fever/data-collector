@@ -90,6 +90,7 @@ func (jc *JobContext) UpdateJob(blkStatus db.DBStatus, jobStatus db.DJStatus, jo
 		if err != nil {
 			blk.Status = oldBlkStatus
 			job.Status = oldJobStatus
+			job.Error  = ""
 		}
 
 		return err

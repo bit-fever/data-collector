@@ -33,7 +33,7 @@ import (
 
 //=============================================================================
 
-func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint, stored bool) (*[]DataInstrumentExt, error) {
+func GetDataInstrumentsByProductIdFull(tx *gorm.DB, pId uint, stored bool) (*[]DataInstrumentExt, error) {
 	var list []DataInstrumentExt
 
 	filter := fmt.Sprintf("data_product_id = %d", pId)
@@ -43,8 +43,13 @@ func GetDataInstrumentsByProductId(tx *gorm.DB, pId uint, stored bool) (*[]DataI
 	}
 
 	res := tx.
-		Select("data_instrument.*, db.status, db.data_from, db.data_to, db.progress ").
-		Joins("LEFT JOIN data_block db ON db.id = data_block_id").
+		Select("data_instrument.*, " +
+					"db.status, db.data_from, db.data_to, db.progress, db.global," +
+					"dj.status dj_status, dj.priority dj_priority, dj.load_from dj_load_from, dj.load_to dj_load_to, dj.curr_day dj_curr_day, dj.tot_days dj_tot_days, dj.error dj_error," +
+					"ij.filename ij_filename, ij.records ij_records, ij.bytes ij_bytes, ij.timezone ij_timezone, ij.parser ij_parser, ij.error ij_error").
+		Joins("LEFT JOIN data_block db ON db.id = data_block_id "+
+				"LEFT JOIN download_job dj ON dj.data_instrument_id = data_instrument.id "+
+				"LEFT JOIN ingestion_job ij ON ij.data_instrument_id = data_instrument.id ").
 		Where(filter).
 		Order("expiration_date").
 		Find(&list)

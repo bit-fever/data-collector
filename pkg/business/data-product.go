@@ -38,7 +38,7 @@ import (
 //=============================================================================
 
 func GetDataInstrumentsByProductId(tx *gorm.DB, c *auth.Context, productId uint, stored bool)(*[]db.DataInstrumentExt, error) {
-	return db.GetDataInstrumentsByProductId(tx, productId, stored)
+	return db.GetDataInstrumentsByProductIdFull(tx, productId, stored)
 }
 
 //=============================================================================

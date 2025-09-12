@@ -80,17 +80,29 @@ type DataProduct struct {
 
 //=============================================================================
 
+type DIRollStatus int
+
+const (
+	DIRollStatusWaiting DIRollStatus =  0
+	DIRollStatusReady   DIRollStatus =  1
+	DIRollStatusNoMatch DIRollStatus = -1
+	DIRollStatusNoData  DIRollStatus = -2
+)
+
+//-----------------------------------------------------------------------------
+
 type DataInstrument struct {
-	Id               uint      `json:"id" gorm:"primaryKey"`
-	DataProductId    uint      `json:"dataProductId"`
-	DataBlockId     *uint      `json:"dataBlockId"`
-	Symbol           string    `json:"symbol"`
-	Name             string    `json:"name"`
-	ExpirationDate  *time.Time `json:"expirationDate,omitempty"`
-	RolloverDate    *time.Time `json:"rolloverDate,omitempty"`
-	Continuous       bool      `json:"continuous"`
-	Month            string    `json:"month"`
-	RolloverDelta    float64   `json:"rolloverDelta"`
+	Id               uint         `json:"id" gorm:"primaryKey"`
+	DataProductId    uint         `json:"dataProductId"`
+	DataBlockId     *uint         `json:"dataBlockId"`
+	Symbol           string       `json:"symbol"`
+	Name             string       `json:"name"`
+	ExpirationDate  *time.Time    `json:"expirationDate,omitempty"`
+	RolloverDate    *time.Time    `json:"rolloverDate,omitempty"`
+	Continuous       bool         `json:"continuous"`
+	Month            string       `json:"month"`
+	RolloverDelta    float64      `json:"rolloverDelta"`
+	RolloverStatus   DIRollStatus `json:"rolloverStatus"`
 }
 
 //=============================================================================
@@ -110,6 +122,20 @@ type DataInstrumentExt struct {
 	DataFrom   datatype.IntDate `json:"dataFrom"`
 	DataTo     datatype.IntDate `json:"dataTo"`
 	Progress  *int8             `json:"progress"`
+	Global     bool             `json:"global"`
+	DjPriority int              `json:"djPriority"`
+	DjStatus  *DJStatus         `json:"djStatus"`
+	DjLoadFrom datatype.IntDate `json:"djLoadFrom"`
+	DjLoadTo   datatype.IntDate `json:"djLoadTo"`
+	DjCurrDay  int              `json:"djCurrDay"`
+	DjTotDays  int              `json:"djTotDays"`
+	DjError    string           `json:"djError"`
+	IjFilename string           `json:"ijFilename"`
+	IjRecords  int              `json:"ijRecords"`
+	IjBytes    int64            `json:"ijBytes"`
+	IjTimezone string           `json:"ijTimezone"`
+	IjParser   string           `json:"ijParser"`
+	IjError    string           `json:"ijError"`
 }
 
 //=============================================================================

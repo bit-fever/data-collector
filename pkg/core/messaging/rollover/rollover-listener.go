@@ -118,7 +118,11 @@ func recalcForProduct(id uint) bool {
 		}
 	}
 
-	slog.Info("recalcForProduct: Ending rollover recalc", "dpId", id, "error", err)
+	if err != nil {
+		slog.Error("recalcForProduct: Operation aborted due to error. Will retry", "dpId", id, "error", err)
+	}
+
+	slog.Info("recalcForProduct: Ending rollover recalc", "dpId", id)
 
 	return err == nil
 }
@@ -199,14 +203,19 @@ func calcRolloverDelta(dp *db.DataProduct, curr, next *db.DataInstrumentExt, sta
 		} else {
 			//--- Ok, found the same time. Now calc delta
 			p2next := prices2[nextIdx +1]
-			curr.RolloverDate = &p2next.Time
-			curr.RolloverDelta= p2next.Open - p1.Close
+			curr.RolloverDate   = &p2next.Time
+			curr.RolloverDelta  = p2next.Open - p1.Close
+			curr.RolloverStatus = db.DIRollStatusReady
 			return nil
 		}
 	}
 
 	slog.Error("calcRolloverDelta: Cannot find any rollover delta", "dpId", dp.Id, "currId", curr.Id, "nextId", next.Id, "startRollDate", startRollDate)
 	//TODO: Send event
+
+	curr.RolloverStatus = db.DIRollStatusNoMatch
+	curr.RolloverDelta  = 0
+	curr.RolloverDate   = &startRollDate
 
 	return nil
 }
@@ -266,6 +275,7 @@ func convertInstrument(die *db.DataInstrumentExt) *db.DataInstrument {
 		Continuous:     die.Continuous,
 		Month:          die.Month,
 		RolloverDelta:  die.RolloverDelta,
+		RolloverStatus: die.RolloverStatus,
 	}
 }
 
@@ -273,8 +283,10 @@ func convertInstrument(die *db.DataInstrumentExt) *db.DataInstrument {
 
 func setFakeRolloverDate(die *db.DataInstrumentExt, dp *db.DataProduct) bool {
 	rollDate          := calcRolloverDate(*die.ExpirationDate, dp.RolloverTrigger)
-	die.RolloverDate  = &rollDate
-	die.RolloverDelta = 0
+	die.RolloverDate   = &rollDate
+	die.RolloverDelta  = 0
+	die.RolloverStatus = db.DIRollStatusNoData
+
 	return true
 }
 

@@ -44,6 +44,7 @@ func (uc *UserConnection) key() string {
 func (uc *UserConnection) allocateToJob(job *ScheduledJob) {
 	uc.scheduledJob        = job
 	job.job.UserConnection = uc.key()
+	job.job.Error          = ""
 }
 
 //=============================================================================
