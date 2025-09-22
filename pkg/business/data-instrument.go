@@ -296,7 +296,7 @@ func parseTime(t string, defValue time.Time, loc *time.Location) (time.Time, err
 func buildDataAggregator(config *ds.DataConfig) (*ds.DataAggregator, error) {
 	tf := config.Timeframe
 
-	if tf=="1m" || tf=="5m" || tf=="15m" || tf=="60m" {
+	if tf=="1m" || tf=="5m" || tf=="15m" || tf=="60m" || tf=="1440m" {
 		return ds.NewDataAggregator(nil), nil
 	}
 

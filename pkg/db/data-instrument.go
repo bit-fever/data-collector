@@ -39,7 +39,7 @@ func GetDataInstrumentsByProductIdFull(tx *gorm.DB, pId uint, stored bool) (*[]D
 	filter := fmt.Sprintf("data_product_id = %d", pId)
 
 	if stored {
-		filter = filter +" AND status IS NOT NULL"
+		filter = filter +" AND db.status IS NOT NULL"
 	}
 
 	res := tx.
