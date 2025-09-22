@@ -66,7 +66,7 @@ func Init(cfg *app.Config) *time.Ticker {
 
 //=============================================================================
 
-func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock) *db.DownloadJob {
+func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock, priority int) *db.DownloadJob {
 	return &db.DownloadJob{
 		DataInstrumentId: di.Id,
 		DataBlockId     : blk.Id,
@@ -74,6 +74,8 @@ func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock) *db.DownloadJob
 		LoadTo          : calcLoadTo(di.ExpirationDate),
 		CurrDay         : 0,
 		TotDays         : int(DaysBack),
+		Status          : db.DJStatusWaiting,
+		Priority        : priority,
 	}
 }
 
@@ -261,7 +263,7 @@ func getOrCreateDataBlock(tx *gorm.DB, dp *db.DataProduct, di *db.DataInstrument
 //=============================================================================
 
 func addDownloadJob(tx *gorm.DB, block *db.DataBlock, di *db.DataInstrument) (*jobmanager.ScheduledJob,error) {
-	job := CreateDownloadJob(di, block)
+	job := CreateDownloadJob(di, block, 0)
 	err := db.AddDownloadJob(tx, job)
 	if err != nil {
 		return nil,err

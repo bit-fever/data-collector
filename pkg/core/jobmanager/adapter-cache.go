@@ -118,6 +118,14 @@ func (ac *AdapterCache) setConnection(username, connCode string, connected bool)
 		oldUc.connected = connected
 	}
 
+	if connected {
+		for _, sj := range ac.waitingJobs {
+			if sj.job.UserConnection == uc.key() {
+				sj.lastError = nil
+			}
+		}
+	}
+
 	ac.Unlock()
 }
 

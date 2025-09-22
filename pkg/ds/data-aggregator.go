@@ -69,7 +69,8 @@ func (a *DataAggregator) Add(dp *DataPoint) {
 	if a.currDp == nil {
 		a.currDp = a.createInitialDataPoint(dp)
 	} else {
-		if a.currDp.Time.Equal(a.timeSlotFunc(dp.Time)) {
+		dpTime := a.timeSlotFunc(dp.Time.In(time.UTC))
+		if a.currDp.Time.Equal(dpTime) {
 			a.Merge(dp)
 		} else {
 			a.dataPoints = append(a.dataPoints, a.currDp)
@@ -111,7 +112,7 @@ func (a *DataAggregator) Aggregate(daDes *DataAggregator) {
 
 func (a *DataAggregator) createInitialDataPoint(dp *DataPoint) *DataPoint {
 	return &DataPoint{
-		Time        : a.timeSlotFunc(dp.Time),
+		Time        : a.timeSlotFunc(dp.Time).In(time.UTC),
 		Open        : dp.Open,
 		High        : dp.High,
 		Low         : dp.Low,
@@ -207,6 +208,16 @@ func TimeSlotFunction60m(dpTime time.Time) time.Time {
 	if mins ==  0 { return dpTime }
 
 	return dpTime.Add(time.Minute * time.Duration(60-mins))
+}
+
+//=============================================================================
+
+func TimeSlotFunction1440m(dpTime time.Time) time.Time {
+	hours,mins,_ := dpTime.Clock()
+
+	if mins ==  0 && hours == 0 { return dpTime }
+
+	return dpTime.Add(time.Minute * time.Duration(1440-mins-hours*60))
 }
 
 //=============================================================================

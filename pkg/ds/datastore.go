@@ -193,6 +193,11 @@ func BuildAggregates(da5m *DataAggregator, config *DataConfig) error {
 			da60m := NewDataAggregator(TimeSlotFunction60m)
 			da15m.Aggregate(da60m)
 			err = saveAggregate(da60m, config, "60m")
+			if err == nil {
+				da1day := NewDataAggregator(TimeSlotFunction1440m)
+				da60m.Aggregate(da1day)
+				err = saveAggregate(da1day, config, "1440m")
+			}
 		}
 	}
 

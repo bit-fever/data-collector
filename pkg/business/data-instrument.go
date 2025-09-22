@@ -26,12 +26,14 @@ package business
 
 import (
 	"errors"
+	"log/slog"
 	"math"
 	"strconv"
 	"time"
 
 	"github.com/bit-fever/core/auth"
 	"github.com/bit-fever/core/req"
+	"github.com/bit-fever/data-collector/pkg/core/jobmanager"
 	"github.com/bit-fever/data-collector/pkg/core/process/invloader"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
@@ -126,8 +128,11 @@ func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*D
 }
 
 //=============================================================================
+//TODO: user should own the instrument in order to reload (or limited to admins)
 
 func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.DownloadJob, *db.DataBlock, error) {
+	//--- Data instrument
+
 	di,err := db.GetDataInstrumentById(tx, id)
 	if err != nil {
 		return nil,nil,req.NewServerErrorByError(err)
@@ -136,19 +141,50 @@ func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.Downlo
 		return nil,nil,req.NewNotFoundError("Data instrument was not found. Id=", id)
 	}
 
-	var blk *db.DataBlock
-	blk,err = db.GetDataBlockById(tx, *di.DataBlockId)
+	//--- Data product
+
+	var dp *db.DataProduct
+	dp,err = db.GetDataProductById(tx, di.DataProductId)
 	if err != nil {
 		return nil,nil,req.NewServerErrorByError(err)
 	}
-	if blk == nil {
-		return nil,nil,req.NewNotFoundError("Data block was not found. Id=", id)
+	if dp == nil {
+		return nil,nil,req.NewNotFoundError("Data product was not found. Id=", di.DataProductId)
 	}
+
+	if dp.Status == db.DPStatusReady {
+		err = db.UpdateDataProductFields(tx, dp.Id, db.DPStatusFetchingData)
+		if err != nil {
+			return nil,nil,req.NewServerErrorByError(err)
+		}
+	}
+
+	//--- Data block
+
+	blk := jobmanager.GetDataBlock(dp.SystemCode, dp.Symbol, di.Symbol)
+	if blk == nil {
+		slog.Error("ReloadDataInstrumentData: Data block was not found", "symbol", di.Symbol, "root", dp.Symbol)
+		return nil,nil,req.NewNotFoundError("Data block was not found. Symbol=", di.Symbol)
+	}
+
+	//--- Check status
 
 	if blk.Status != db.DBStatusEmpty && blk.Status != db.DBStatusReady {
 		return nil,nil,req.NewBadRequestError("Data instrument must be READY or EMPTY. Id=", id)
 	}
 
+	//--- Update data instrument
+
+	di.RolloverDate  = nil
+	di.RolloverDelta = 0
+	di.RolloverStatus= db.DIRollStatusWaiting
+
+	err = db.UpdateDataInstrument(tx, di)
+	if err != nil {
+		return nil,nil,req.NewServerErrorByError(err)
+	}
+
+	//--- Update data block
 
 	blk.Status   = db.DBStatusWaiting
 	blk.DataFrom = 0
@@ -160,7 +196,9 @@ func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.Downlo
 		return nil,nil,req.NewServerErrorByError(err)
 	}
 
-	job := invloader.CreateDownloadJob(di, blk)
+	//--- Add download job
+
+	job := invloader.CreateDownloadJob(di, blk, 100)
 
 	return job, blk, db.AddDownloadJob(tx, job)
 }

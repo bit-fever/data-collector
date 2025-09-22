@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bit-fever/core/msg"
 	"github.com/bit-fever/data-collector/pkg/db"
 	"github.com/bit-fever/data-collector/pkg/ds"
 	"gorm.io/gorm"
@@ -82,31 +83,38 @@ func recalcForProduct(id uint) bool {
 	dp,instruments,err := getIntrumentSet(id)
 	if err == nil {
 		var updated []*db.DataInstrumentExt
+		var curr,next *db.DataInstrumentExt
+
 		for i:=0; i<len(*instruments)-1; i++ {
-			curr := (*instruments)[i]
-			next := (*instruments)[i+1]
+			curr = &(*instruments)[i]
+			next = &(*instruments)[i+1]
 
 			var toUpdate bool
 
-			//--- Check if we already calculated this rollover date
-			if curr.RolloverDate == nil {
+			//--- Check if we have to calculate the rollover
+
+			shouldRecalc := curr.RolloverDate   == nil ||
+							curr.RolloverStatus == db.DIRollStatusNoData ||
+							curr.RolloverStatus == db.DIRollStatusNoMatch
+
+			if shouldRecalc {
 				if *curr.Status == db.DBStatusReady {
 					//--- First block loaded. Check the second one
 
 					if *next.Status == db.DBStatusReady || *next.Status == db.DBStatusSleeping {
-						toUpdate, err = calcRollover(dp, &curr, &next, dp.RolloverTrigger)
+						toUpdate, err = calcRollover(dp, curr, next, dp.RolloverTrigger)
 						if err != nil {
 							break;
 						}
 					} else if *next.Status == db.DBStatusEmpty {
-						toUpdate = setFakeRolloverDate(&curr, dp)
+						toUpdate = setFakeRolloverDate(curr, dp)
 					}
 				} else if *curr.Status == db.DBStatusEmpty {
-					toUpdate = setFakeRolloverDate(&curr, dp)
+					toUpdate = setFakeRolloverDate(curr, dp)
 				}
 
 				if toUpdate {
-					updated = append(updated, &curr)
+					updated = append(updated, curr)
 				}
 			}
 		}
@@ -211,7 +219,6 @@ func calcRolloverDelta(dp *db.DataProduct, curr, next *db.DataInstrumentExt, sta
 	}
 
 	slog.Error("calcRolloverDelta: Cannot find any rollover delta", "dpId", dp.Id, "currId", curr.Id, "nextId", next.Id, "startRollDate", startRollDate)
-	//TODO: Send event
 
 	curr.RolloverStatus = db.DIRollStatusNoMatch
 	curr.RolloverDelta  = 0
@@ -293,10 +300,20 @@ func setFakeRolloverDate(die *db.DataInstrumentExt, dp *db.DataProduct) bool {
 //=============================================================================
 
 func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt) error {
+	var emptyDie, noMatchDie *db.DataInstrumentExt
+
 	for _, die := range *instruments {
 		status := *die.Status
 		if status != db.DBStatusReady && status != db.DBStatusEmpty && status != db.DBStatusSleeping {
 			return nil
+		}
+
+		if status == db.DBStatusEmpty {
+			emptyDie = &die
+		}
+
+		if die.RolloverStatus == db.DIRollStatusNoMatch {
+			noMatchDie = &die
 		}
 
 		if status == db.DBStatusSleeping {
@@ -313,11 +330,38 @@ func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt
 	if err != nil {
 		slog.Error("recalcProductStatus: Failed to set data product status", "error", err)
 	} else {
-		//TODO: send event
+		sendEventToUser(dp, instruments, emptyDie, noMatchDie)
 		slog.Info("recalcProductStatus: Data product is ready", "dpId", dp.Id, "root", dp.Symbol)
 	}
 
 	return err
+}
+
+//=============================================================================
+
+func sendEventToUser(dp *db.DataProduct, instruments *[]db.DataInstrumentExt, empty, noMatch *db.DataInstrumentExt) {
+	if empty == nil && noMatch == nil {
+		_=msg.SendEventByCode(dp.Username, "dc.dataProduct.ready", map[string]interface{}{
+			"root"       : dp.Symbol,
+			"instruments": len(*instruments),
+		})
+		return
+	}
+
+	if empty != nil {
+		_=msg.SendEventByCode(dp.Username, "dc.dataProduct.readyEmpty", map[string]interface{}{
+			"root"  : dp.Symbol,
+			"symbol": empty.Symbol,
+			"system": dp.SystemCode,
+		})
+		return
+	}
+
+	_=msg.SendEventByCode(dp.Username, "dc.dataProduct.readyNoMatch", map[string]interface{}{
+		"root"  : dp.Symbol,
+		"symbol": noMatch.Symbol,
+		"system": dp.SystemCode,
+	})
 }
 
 //=============================================================================
