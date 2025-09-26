@@ -26,6 +26,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/bit-fever/core/req"
 	"gorm.io/gorm"
@@ -39,7 +40,7 @@ func GetDataInstrumentsByProductIdFull(tx *gorm.DB, pId uint, stored bool) (*[]D
 	filter := fmt.Sprintf("data_product_id = %d", pId)
 
 	if stored {
-		filter = filter +" AND db.status IS NOT NULL"
+		filter = filter +" AND (db.status IS NOT NULL OR virtual_instrument = 1)"
 	}
 
 	res := tx.
@@ -63,7 +64,7 @@ func GetDataInstrumentsByProductIdFull(tx *gorm.DB, pId uint, stored bool) (*[]D
 
 //=============================================================================
 
-func GetRollingDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrumentExt, error) {
+func GetRollingDataInstrumentsByProductId(tx *gorm.DB, pId uint, months string) (*[]DataInstrumentExt, error) {
 	var list []DataInstrumentExt
 
 	filter := map[string]any{}
@@ -81,7 +82,45 @@ func GetRollingDataInstrumentsByProductId(tx *gorm.DB, pId uint) (*[]DataInstrum
 		return nil, req.NewServerErrorByError(res.Error)
 	}
 
-	return &list, nil
+	var result []DataInstrumentExt
+	for _, die := range list {
+		//--- We need to add an instrument only if it is part of the month set
+		//--- (loaded continuous instruments cause issues)
+		if len(die.Month)>0 && strings.Index(months, die.Month) >= 0 {
+			result = append(result, die)
+		}
+	}
+
+	return &result, nil
+}
+
+//=============================================================================
+
+func GetRollingDataInstrumentsByProductIdFast(tx *gorm.DB, pId uint, months string) (*[]DataInstrument, error) {
+	var list []DataInstrument
+
+	filter := map[string]any{}
+	filter["data_product_id"] = pId
+	filter["continuous"]      = 0
+
+	res := tx.Where(filter).
+		Order("expiration_date").
+		Find(&list)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	var result []DataInstrument
+	for _, die := range list {
+		//--- We need to add an instrument only if it is part of the month set
+		//--- (loaded continuous instruments cause issues)
+		if len(die.Month)>0 && strings.Index(months, die.Month) >= 0 {
+			result = append(result, die)
+		}
+	}
+
+	return &result, nil
 }
 
 //=============================================================================
@@ -108,6 +147,28 @@ func GetDataInstrumentsFull(tx *gorm.DB, filter map[string]any) (*[]DataInstrume
 func GetDataInstrumentById(tx *gorm.DB, id uint) (*DataInstrument, error) {
 	var list []DataInstrument
 	res := tx.Find(&list, id)
+
+	if res.Error != nil {
+		return nil, req.NewServerErrorByError(res.Error)
+	}
+
+	if len(list) == 1 {
+		return &list[0], nil
+	}
+
+	return nil, nil
+}
+
+//=============================================================================
+
+func GetVirtualDataInstrumentByProductId(tx *gorm.DB, pId uint) (*DataInstrument, error) {
+	var list []DataInstrument
+
+	filter := map[string]any{}
+	filter["data_product_id"]    = pId
+	filter["virtual_instrument"] = true
+
+	res := tx.Where(filter).Find(&list)
 
 	if res.Error != nil {
 		return nil, req.NewServerErrorByError(res.Error)

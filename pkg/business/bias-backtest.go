@@ -124,8 +124,8 @@ func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 
 	bbr.config.DataConfig.Timeframe = "15m"
 
-	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m)
 	loc,_:= time.LoadLocation(bbr.config.Timezone)
+	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m, loc)
 	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, &bbr.config.DataConfig, loc, da)
 
 	if err != nil {

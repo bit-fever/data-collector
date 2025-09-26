@@ -88,8 +88,11 @@ func processDay(jc *JobContext, uc *UserConnection, blk *db.DataBlock, job *db.D
 //=============================================================================
 
 func storeBars(blk *db.DataBlock, bars []*platform.PriceBar) error {
+	//--- We need to use UTC otherwise daily aggregates are not properly computed
+	loc := time.UTC
+
 	var dataPoints []*ds.DataPoint
-	var dataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m)
+	var dataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m, loc)
 
 	config := &ds.DataConfig{
 		UserTable: false,

@@ -145,8 +145,8 @@ func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResp
 func GetBiasSummaryData(c *auth.Context, id uint, bsr *BiasSummaryResponse) error {
 	bsr.config.DataConfig.Timeframe = "15m"
 
-	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m)
 	loc,_:= time.LoadLocation(bsr.config.Timezone)
+	da   := ds.NewDataAggregator(ds.TimeSlotFunction30m, loc)
 	err  := ds.GetDataPoints(DefaultFrom, DefaultTo, &bsr.config.DataConfig, loc, da)
 
 	if err != nil {

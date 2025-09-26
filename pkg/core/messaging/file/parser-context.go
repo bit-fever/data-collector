@@ -36,13 +36,14 @@ import (
 //=============================================================================
 
 type ParserContext struct {
-	Reader     io.Reader
-	Config     *ds.DataConfig
-	Location   *time.Location
-	Job        *db.IngestionJob
-	Block      *db.DataBlock
-	DataRange  *DataRange
-	DataAggreg *ds.DataAggregator
+	Reader          io.Reader
+	Config          *ds.DataConfig
+	FileLocation    *time.Location
+	ProductLocation *time.Location
+	Job             *db.IngestionJob
+	Block           *db.DataBlock
+	DataRange       *DataRange
+	DataAggreg      *ds.DataAggregator
 
 	//--- Private stuff
 
@@ -56,18 +57,19 @@ type ParserContext struct {
 //===
 //=============================================================================
 
-func NewParserContext(file io.Reader, config *ds.DataConfig, loc *time.Location, job *db.IngestionJob, b *db.DataBlock) *ParserContext {
+func NewParserContext(file io.Reader, config *ds.DataConfig, fileLoc *time.Location, job *db.IngestionJob, b *db.DataBlock, prLoc *time.Location) *ParserContext {
 	c := &ParserContext{
-		Reader  : file,
-		Config  : config,
-		Location: loc,
-		Job     : job,
-		Block   : b,
+		Reader         : file,
+		Config         : config,
+		FileLocation   : fileLoc,
+		ProductLocation: prLoc,
+		Job            : job,
+		Block          : b,
 	}
 
 	c.dataPoints = []*ds.DataPoint{}
 	c.DataRange  = &DataRange{}
-	c.DataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m)
+	c.DataAggreg = ds.NewDataAggregator(ds.TimeSlotFunction5m, prLoc)
 
 	return c
 }

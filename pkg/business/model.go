@@ -78,16 +78,17 @@ type DataInstrumentDataParams struct {
 //=============================================================================
 
 type DataInstrumentDataResponse struct {
-	Id          uint            `json:"id"`
-	Symbol      string          `json:"symbol"`
-	From        string          `json:"from"`
-	To          string          `json:"to"`
-	Timeframe   string          `json:"timeframe"`
-	Timezone    string          `json:"timezone"`
-	Reduction   int             `json:"reduction,omitempty"`
-	Reduced     bool            `json:"reduced"`
-	Records     int             `json:"records"`
-	DataPoints  []*ds.DataPoint `json:"dataPoints"`
+	Id               uint            `json:"id"`
+	Symbol           string          `json:"symbol"`
+	From             string          `json:"from"`
+	To               string          `json:"to"`
+	Timeframe        string          `json:"timeframe"`
+	Timezone         string          `json:"timezone"`
+	Reduction        int             `json:"reduction,omitempty"`
+	Reduced          bool            `json:"reduced"`
+	Records          int             `json:"records"`
+	NoDataForVirtual bool            `json:"noDataForVirtual"`
+	DataPoints       []*ds.DataPoint `json:"dataPoints"`
 }
 
 //=============================================================================
@@ -174,8 +175,10 @@ func (bc *BiasConfig) FromBiasConfig(dbc *db.BiasConfig) {
 //=============================================================================
 
 type DataConfig struct {
-	DataConfig ds.DataConfig
-	Timezone   string
+	DataConfig         ds.DataConfig
+	Timezone           string
+	VirtualInstrument  bool
+	Instruments       *[]db.DataInstrument
 }
 
 //=============================================================================

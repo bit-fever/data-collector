@@ -63,7 +63,7 @@ func (p *TradestationParser) Parse(ctx *ParserContext) error {
 				return err
 			}
 		} else {
-			if err := p.parseLine(line, ctx.Location); err != nil {
+			if err := p.parseLine(line, ctx.FileLocation); err != nil {
 				return err
 			}
 		}

@@ -28,7 +28,6 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bit-fever/core/msg"
@@ -121,8 +120,8 @@ func recalcForProduct(id uint) bool {
 
 		err = updateRolledInstruments(updated)
 
-		if err == nil && dp.Status != db.DBStatusReady {
-			err = recalcProductStatus(dp, instruments)
+		if err == nil {
+			err = recalcVirtualInstrumentStatus(dp, instruments)
 		}
 	}
 
@@ -148,7 +147,7 @@ func getIntrumentSet(dpId uint) (*db.DataProduct,*[]db.DataInstrumentExt,error) 
 			if dp == nil {
 				err = errors.New("No data product found : "+ strconv.Itoa(int(dpId)))
 			} else {
-				list,err = db.GetRollingDataInstrumentsByProductId(tx, dpId)
+				list,err = db.GetRollingDataInstrumentsByProductId(tx, dpId, dp.Months)
 			}
 		}
 		return err
@@ -158,16 +157,7 @@ func getIntrumentSet(dpId uint) (*db.DataProduct,*[]db.DataInstrumentExt,error) 
 		return nil,nil,err2
 	}
 
-	var result []db.DataInstrumentExt
-	for _, die := range *list {
-		//--- We need to add an instrument only if it is part of the month set
-		//--- (loaded continuous instruments cause issues)
-		if strings.Index(dp.Months, die.Month) >= 0 {
-			result = append(result, die)
-		}
-	}
-
-	return dp,&result,nil
+	return dp,list,nil
 }
 
 //=============================================================================
@@ -198,7 +188,7 @@ func calcRolloverDelta(dp *db.DataProduct, curr, next *db.DataInstrumentExt, sta
 	currIdx := 0
 	nextIdx := 0
 
-	for currIdx<len(prices1) && nextIdx<len(prices2)-1 {
+	for currIdx<len(prices1) && nextIdx<len(prices2) {
 		p1 := prices1[currIdx]
 		p2 := prices2[nextIdx]
 
@@ -210,9 +200,8 @@ func calcRolloverDelta(dp *db.DataProduct, curr, next *db.DataInstrumentExt, sta
 			nextIdx++
 		} else {
 			//--- Ok, found the same time. Now calc delta
-			p2next := prices2[nextIdx +1]
-			curr.RolloverDate   = &p2next.Time
-			curr.RolloverDelta  = p2next.Open - p1.Close
+			curr.RolloverDate   = &p1.Time
+			curr.RolloverDelta  = p2.Close - p1.Close
 			curr.RolloverStatus = db.DIRollStatusReady
 			return nil
 		}
@@ -231,7 +220,7 @@ func calcRolloverDelta(dp *db.DataProduct, curr, next *db.DataInstrumentExt, sta
 
 func getPrices(systemCode, symbol string, from time.Time) ([]*ds.DataPoint, error){
 	config := ds.NewDataConfig(systemCode, symbol,"60m")
-	da     := ds.NewDataAggregator(nil)
+	da     := ds.NewDataAggregator(nil,nil)
 	to     := from.Add(5 * 24 * time.Hour)
 
 	err    := ds.GetDataPoints(from, to, config, time.UTC, da)
@@ -299,7 +288,7 @@ func setFakeRolloverDate(die *db.DataInstrumentExt, dp *db.DataProduct) bool {
 
 //=============================================================================
 
-func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt) error {
+func recalcVirtualInstrumentStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt) error {
 	var emptyDie, noMatchDie *db.DataInstrumentExt
 
 	for _, die := range *instruments {
@@ -321,16 +310,26 @@ func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt
 		}
 	}
 
-	dp.Status = db.DPStatusReady
+	var vi *db.DataInstrument
 
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
-		return db.UpdateDataProductFields(tx, dp.Id, dp.Status)
+		var err error
+		vi,err=db.GetVirtualDataInstrumentByProductId(tx, dp.Id)
+		if err == nil {
+			if vi == nil {
+				return errors.New("Cannot find Virtual Data instrument for product with id: "+ strconv.Itoa(int(dp.Id)))
+			}
+			err = sendEventToUser(dp, instruments, emptyDie, noMatchDie, vi)
+			if err == nil {
+				return db.UpdateDataInstrument(tx, vi)
+			}
+		}
+		return err
 	})
 
 	if err != nil {
 		slog.Error("recalcProductStatus: Failed to set data product status", "error", err)
 	} else {
-		sendEventToUser(dp, instruments, emptyDie, noMatchDie)
 		slog.Info("recalcProductStatus: Data product is ready", "dpId", dp.Id, "root", dp.Symbol)
 	}
 
@@ -339,28 +338,31 @@ func recalcProductStatus(dp *db.DataProduct, instruments *[]db.DataInstrumentExt
 
 //=============================================================================
 
-func sendEventToUser(dp *db.DataProduct, instruments *[]db.DataInstrumentExt, empty, noMatch *db.DataInstrumentExt) {
+func sendEventToUser(dp *db.DataProduct, instruments *[]db.DataInstrumentExt, empty, noMatch *db.DataInstrumentExt, vi *db.DataInstrument) error {
 	if empty == nil && noMatch == nil {
-		_=msg.SendEventByCode(dp.Username, "dc.dataProduct.ready", map[string]interface{}{
+		vi.RolloverStatus = db.DIRollStatusReady
+		return msg.SendEventByCode(dp.Username, "dc.dataProduct.ready", map[string]interface{}{
 			"root"       : dp.Symbol,
+			"virtual"    : vi.Symbol,
 			"instruments": len(*instruments),
 		})
-		return
 	}
 
 	if empty != nil {
-		_=msg.SendEventByCode(dp.Username, "dc.dataProduct.readyEmpty", map[string]interface{}{
-			"root"  : dp.Symbol,
-			"symbol": empty.Symbol,
-			"system": dp.SystemCode,
+		vi.RolloverStatus = db.DIRollStatusNoData
+		return msg.SendEventByCode(dp.Username, "dc.dataProduct.readyEmpty", map[string]interface{}{
+			"root"   : dp.Symbol,
+			"symbol" : empty.Symbol,
+			"virtual": vi.Symbol,
 		})
-		return
 	}
 
-	_=msg.SendEventByCode(dp.Username, "dc.dataProduct.readyNoMatch", map[string]interface{}{
+	vi.RolloverStatus = db.DIRollStatusNoMatch
+	return msg.SendEventByCode(dp.Username, "dc.dataProduct.readyNoMatch", map[string]interface{}{
 		"root"  : dp.Symbol,
 		"symbol": noMatch.Symbol,
 		"system": dp.SystemCode,
+		"virtual": vi.Symbol,
 	})
 }
 

@@ -99,7 +99,8 @@ func ingestDatafile(job *db.IngestionJob, b *db.DataBlock) (*ParserContext, erro
 		return nil,err
 	}
 
-	loc,err := retrieveLocation(job.Timezone)
+	//--- This is the file's timezone (will be used to parse dates inside the file)
+	floc,err := retrieveLocation(job.Timezone)
 	if err != nil {
 		return nil,err
 	}
@@ -109,12 +110,14 @@ func ingestDatafile(job *db.IngestionJob, b *db.DataBlock) (*ParserContext, erro
 		return nil,err
 	}
 
+
 	file,err := ds.OpenDatafile(job.Filename)
 	if err != nil {
 		return nil,err
 	}
 
-	context := NewParserContext(file, config, loc, job, b)
+	//--- We need to use UTC otherwise daily aggregates are not properly computed
+	context := NewParserContext(file, &config.DataConfig, floc, job, b, time.UTC)
 	defer file.Close()
 
 	err = parser.Parse(context)
@@ -145,7 +148,7 @@ func retrieveLocation(timezone string) (*time.Location, error){
 
 //=============================================================================
 
-func retrieveConfig(id uint) (*ds.DataConfig, error) {
+func retrieveConfig(id uint) (*business.DataConfig, error) {
 	var config *business.DataConfig
 
 	err := db.RunInTransaction(func(tx *gorm.DB) error {
@@ -154,7 +157,7 @@ func retrieveConfig(id uint) (*ds.DataConfig, error) {
 		return err
 	})
 
-	return &config.DataConfig, err
+	return config, err
 }
 
 //=============================================================================

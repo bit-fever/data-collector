@@ -63,7 +63,12 @@ func CreateDataConfig(tx *gorm.DB, id uint) (*DataConfig, error) {
 	if err == nil {
 		p, err = db.GetDataProductById(tx, i.DataProductId)
 		if err == nil {
-			return createConfig(i, p), nil
+			var instruments *[]db.DataInstrument
+			if i.VirtualInstrument {
+				instruments,err = db.GetRollingDataInstrumentsByProductIdFast(tx, p.Id, p.Months)
+			}
+
+			return createConfig(i, p, instruments), nil
 		}
 	}
 
@@ -96,34 +101,41 @@ func GetDataInstrumentById(tx *gorm.DB, c *auth.Context, id uint, details bool) 
 func GetDataInstrumentDataById(c *auth.Context, spec *DataInstrumentDataSpec)(*DataInstrumentDataResponse, error) {
 	params,err := parseInstrumentDataParams(spec)
 	if err != nil {
-		return nil, err
+		return nil, req.NewBadRequestError(err.Error())
 	}
 
+	var dataPoints []*ds.DataPoint
+
 	start := time.Now()
-	err    = ds.GetDataPoints(params.From, params.To, &spec.Config.DataConfig, params.Location, params.Aggregator)
-	dur   := time.Now().Sub(start).Seconds()
+	dataPoints, err = getDataPoints(params, spec.Config)
+	durQ := time.Now().Sub(start).Seconds()
+	lenQ := len(dataPoints)
 	if err != nil {
 		return nil, err
 	}
 
-	dataPoints := params.Aggregator.DataPoints()
+	noDataForVirtual := dataPoints == nil
 
-	c.Log.Info("GetInstrumentDataById: Query stats", "duration", dur, "records", len(dataPoints))
-
+	start = time.Now()
 	reduced := false
 	dataPoints,reduced = reduceDataPoints(dataPoints, params.Reduction)
+	durR := time.Now().Sub(start).Seconds()
+	lenR := len(dataPoints)
+
+	c.Log.Info("GetDataInstrumentDataById: Query stats", "durationQ", durQ, "recordsQ", lenQ, "durationR", durR, "recordsR", lenR)
 
 	return &DataInstrumentDataResponse{
-		Id         : spec.Id,
-		Symbol     : spec.Config.DataConfig.Symbol,
-		From       : params.From.Format(time.DateTime),
-		To         : params.To.Format(time.DateTime),
-		Timeframe  : spec.Config.DataConfig.Timeframe,
-		Timezone   : params.Location.String(),
-		Reduction  : params.Reduction,
-		Reduced    : reduced,
-		Records    : len(dataPoints),
-		DataPoints : dataPoints,
+		Id              : spec.Id,
+		Symbol          : spec.Config.DataConfig.Symbol,
+		From            : params.From.Format(time.DateTime),
+		To              : params.To.Format(time.DateTime),
+		Timeframe       : spec.Config.DataConfig.Timeframe,
+		Timezone        : params.Location.String(),
+		Reduction       : params.Reduction,
+		Reduced         : reduced,
+		NoDataForVirtual: noDataForVirtual,
+		Records         : len(dataPoints),
+		DataPoints      : dataPoints,
 	}, nil
 }
 
@@ -150,13 +162,6 @@ func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.Downlo
 	}
 	if dp == nil {
 		return nil,nil,req.NewNotFoundError("Data product was not found. Id=", di.DataProductId)
-	}
-
-	if dp.Status == db.DPStatusReady {
-		err = db.UpdateDataProductFields(tx, dp.Id, db.DPStatusFetchingData)
-		if err != nil {
-			return nil,nil,req.NewServerErrorByError(err)
-		}
 	}
 
 	//--- Data block
@@ -198,7 +203,7 @@ func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.Downlo
 
 	//--- Add download job
 
-	job := invloader.CreateDownloadJob(di, blk, 100)
+	job := invloader.CreateDownloadJob(di, blk, 100, dp.Timezone)
 
 	return job, blk, db.AddDownloadJob(tx, job)
 }
@@ -209,7 +214,7 @@ func ReloadDataInstrumentData(tx *gorm.DB, c *auth.Context, id uint) (*db.Downlo
 //===
 //=============================================================================
 
-func createConfig(i *db.DataInstrument, p *db.DataProduct) *DataConfig {
+func createConfig(i *db.DataInstrument, p *db.DataProduct, instruments *[]db.DataInstrument) *DataConfig {
 	var selector  any
 	var userTable bool
 
@@ -228,7 +233,9 @@ func createConfig(i *db.DataInstrument, p *db.DataProduct) *DataConfig {
 			Selector : selector,
 			Symbol   : i.Symbol,
 		},
-		Timezone: p.Timezone,
+		Timezone         : p.Timezone,
+		VirtualInstrument: i.VirtualInstrument,
+		Instruments      : instruments,
 	}
 }
 
@@ -251,7 +258,12 @@ func parseInstrumentDataParams(spec *DataInstrumentDataSpec) (*DataInstrumentDat
 		return nil, errors.New("Bad 'to' parameter: "+ spec.To +" ("+ err2.Error() +")")
 	}
 
-	da, err3 := buildDataAggregator(&spec.Config.DataConfig)
+	prLoc,err := time.LoadLocation(spec.Config.Timezone)
+	if err != nil {
+		return nil, errors.New("Bad product timezone: "+ spec.Config.Timezone)
+	}
+
+	da, err3 := buildDataAggregator(&spec.Config.DataConfig, prLoc)
 	if err3 != nil {
 		return nil, errors.New("Bad timeframe: "+ spec.Config.DataConfig.Timeframe +" ("+ err3.Error() +")")
 	}
@@ -264,8 +276,8 @@ func parseInstrumentDataParams(spec *DataInstrumentDataSpec) (*DataInstrumentDat
 
 	return &DataInstrumentDataParams{
 		Location  : loc,
-		From      : from,
-		To        : to,
+		From      : from.UTC(),
+		To        : to.UTC(),
 		Reduction : red,
 		Aggregator: da,
 	}, nil
@@ -293,20 +305,20 @@ func parseTime(t string, defValue time.Time, loc *time.Location) (time.Time, err
 
 //=============================================================================
 
-func buildDataAggregator(config *ds.DataConfig) (*ds.DataAggregator, error) {
+func buildDataAggregator(config *ds.DataConfig, productLoc *time.Location) (*ds.DataAggregator, error) {
 	tf := config.Timeframe
 
 	if tf=="1m" || tf=="5m" || tf=="15m" || tf=="60m" || tf=="1440m" {
-		return ds.NewDataAggregator(nil), nil
+		return ds.NewDataAggregator(nil, productLoc), nil
 	}
 
 	if tf=="10m" {
 		config.Timeframe = "5m"
-		return ds.NewDataAggregator(ds.TimeSlotFunction10m), nil
+		return ds.NewDataAggregator(ds.TimeSlotFunction10m, productLoc), nil
 	}
 	if tf=="30m" {
 		config.Timeframe = "15m"
-		return ds.NewDataAggregator(ds.TimeSlotFunction30m), nil
+		return ds.NewDataAggregator(ds.TimeSlotFunction30m, productLoc), nil
 	}
 
 	return nil, errors.New("allowed values are 1m, 5m, 10m, 15m, 30m, 60m")
@@ -369,6 +381,134 @@ func reduceDataPoints(dataPoints []*ds.DataPoint, reduction int) ([]*ds.DataPoin
 	}
 
 	return list, true
+}
+
+//=============================================================================
+//===
+//=== Query splitting
+//===
+//=============================================================================
+
+func getDataPoints(params *DataInstrumentDataParams, config *DataConfig) ([]*ds.DataPoint,error) {
+	if !config.VirtualInstrument {
+		err := ds.GetDataPoints(params.From, params.To, &config.DataConfig, params.Location, params.Aggregator)
+		return params.Aggregator.DataPoints(),err
+	}
+
+	//--- Querying the virtual instrument. We need to split into several queries
+
+	chunks := calcInstrumentListToQuery(params.From, params.To, config.Instruments)
+	if chunks == nil {
+		return nil,nil
+	}
+
+	cumulateDeltas(chunks)
+
+	from    := params.From
+	dconfig := &config.DataConfig
+	aggreg  := ds.NewDataAggregator(nil, nil)
+
+	for i,c := range *chunks {
+		to := c.RolloverDate
+		if i==len(*chunks)-1 {
+			to = params.To
+		}
+
+		dconfig.Symbol = c.Symbol
+		err := ds.GetDataPoints(from, to, dconfig, params.Location, params.Aggregator)
+		if err != nil {
+			return nil,err
+		}
+		shiftDataPoints(params.Aggregator, aggreg, c.Delta)
+		from = to.Add(time.Second*30)
+	}
+
+	return aggreg.DataPoints(),nil
+}
+
+//=============================================================================
+
+func calcInstrumentListToQuery(from,to time.Time, list *[]db.DataInstrument) *[]*QueryChunk {
+	var res []*QueryChunk
+
+	for _,di:= range *list {
+		if di.RolloverStatus == db.DIRollStatusNoMatch || di.RolloverStatus == db.DIRollStatusNoData {
+			continue
+		}
+
+		if di.RolloverStatus == db.DIRollStatusReady  {
+			if from.Compare(*di.RolloverDate) <= 0 {
+				res = append(res, buildQueryChunk(&di))
+			}
+
+			//--- Is this the last instrument that contains data?
+
+			if to.Compare(*di.RolloverDate) <= 0 {
+				return &res
+			}
+		}
+
+		if di.RolloverStatus == db.DIRollStatusWaiting {
+			//--- We arrived to the last instrument that we suppose to be sleeping
+			//--- This is an assumption as we don't join with data_block to get the block's status
+
+			res = append(res, buildQueryChunk(&di))
+			return &res
+		}
+	}
+
+	return nil
+}
+
+//=============================================================================
+
+func buildQueryChunk(di *db.DataInstrument) *QueryChunk {
+	rollDate := *di.ExpirationDate
+	if di.RolloverDate != nil {
+		rollDate = *di.RolloverDate
+	}
+	return &QueryChunk{
+		Symbol      : di.Symbol,
+		RolloverDate: rollDate,
+		Delta       : di.RolloverDelta,
+	}
+}
+
+//=============================================================================
+
+type QueryChunk struct {
+	Symbol       string
+	RolloverDate time.Time
+	Delta        float64
+}
+
+//=============================================================================
+
+func cumulateDeltas(chunks *[]*QueryChunk) {
+	index := len(*chunks) - 3
+
+	for index >= 0 {
+		curr := (*chunks)[index]
+		next := (*chunks)[index+1]
+		curr.Delta += next.Delta
+		index--
+	}
+}
+
+//=============================================================================
+
+func shiftDataPoints(source,destin *ds.DataAggregator, delta float64) {
+	for _,dp := range source.DataPoints() {
+		dp.Open  += delta
+		dp.High  += delta
+		dp.Low   += delta
+		dp.Close += delta
+
+		destin.Add(dp)
+	}
+
+	source.Clear()
+	destin.Flush()
 }
 
 //=============================================================================

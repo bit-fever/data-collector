@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/bit-fever/core"
+	"github.com/bit-fever/core/req"
 	"github.com/bit-fever/data-collector/pkg/app"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -131,7 +132,7 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 
 	rows, err := pool.Query(context.Background(), query, config.Symbol, config.Selector, from, to)
 	if err != nil {
-		return err
+		return req.NewServerErrorByError(err)
 	}
 
 	defer rows.Close()
@@ -141,7 +142,7 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 		err = rows.Scan(&dp.Time, &dp.Open, &dp.High, &dp.Low, &dp.Close, &dp.UpVolume, &dp.DownVolume, &dp.UpTicks, &dp.DownTicks, &dp.OpenInterest)
 
 		if err != nil {
-			return err
+			return req.NewServerErrorByError(err)
 		}
 
 		dp.Time = dp.Time.In(loc)
@@ -151,7 +152,7 @@ func GetDataPoints(from time.Time, to time.Time, config *DataConfig, loc *time.L
 	da.Flush()
 
 	if rows.Err() != nil {
-		return rows.Err()
+		return req.NewServerErrorByError(rows.Err())
 	}
 
 	return nil
@@ -186,15 +187,15 @@ func BuildAggregates(da5m *DataAggregator, config *DataConfig) error {
 	err := saveAggregate(da5m, config, "5m")
 
 	if err == nil {
-		da15m := NewDataAggregator(TimeSlotFunction15m)
+		da15m := NewDataAggregator(TimeSlotFunction15m, da5m.productLoc)
 		da5m.Aggregate(da15m)
 		err = saveAggregate(da15m, config, "15m")
 		if err == nil {
-			da60m := NewDataAggregator(TimeSlotFunction60m)
+			da60m := NewDataAggregator(TimeSlotFunction60m, da5m.productLoc)
 			da15m.Aggregate(da60m)
 			err = saveAggregate(da60m, config, "60m")
 			if err == nil {
-				da1day := NewDataAggregator(TimeSlotFunction1440m)
+				da1day := NewDataAggregator(TimeSlotFunction1440m, da5m.productLoc)
 				da60m.Aggregate(da1day)
 				err = saveAggregate(da1day, config, "1440m")
 			}

@@ -39,14 +39,17 @@ type DataAggregator struct {
 	currDp       *DataPoint
 	dataPoints   []*DataPoint
 	timeSlotFunc TimeSlotFunction
+	productLoc   *time.Location
 }
 
 //=============================================================================
 
-func NewDataAggregator(f TimeSlotFunction) *DataAggregator {
+func NewDataAggregator(f TimeSlotFunction, productLocation *time.Location) *DataAggregator {
 	da := &DataAggregator{}
 	da.dataPoints   = []*DataPoint{}
 	da.timeSlotFunc = f
+	da.productLoc   = productLocation
+
 	return da
 }
 
@@ -69,7 +72,7 @@ func (a *DataAggregator) Add(dp *DataPoint) {
 	if a.currDp == nil {
 		a.currDp = a.createInitialDataPoint(dp)
 	} else {
-		dpTime := a.timeSlotFunc(dp.Time.In(time.UTC))
+		dpTime := a.timeSlotFunc(dp.Time.In(a.productLoc))
 		if a.currDp.Time.Equal(dpTime) {
 			a.Merge(dp)
 		} else {
@@ -105,6 +108,13 @@ func (a *DataAggregator) Aggregate(daDes *DataAggregator) {
 }
 
 //=============================================================================
+
+func (a *DataAggregator) Clear() {
+	a.currDp     = nil
+	a.dataPoints = []*DataPoint{}
+}
+
+//=============================================================================
 //===
 //=== Private methods
 //===
@@ -112,7 +122,7 @@ func (a *DataAggregator) Aggregate(daDes *DataAggregator) {
 
 func (a *DataAggregator) createInitialDataPoint(dp *DataPoint) *DataPoint {
 	return &DataPoint{
-		Time        : a.timeSlotFunc(dp.Time).In(time.UTC),
+		Time        : a.timeSlotFunc(dp.Time).In(a.productLoc),
 		Open        : dp.Open,
 		High        : dp.High,
 		Low         : dp.Low,
@@ -140,6 +150,10 @@ func (a *DataAggregator) Merge(dp *DataPoint) {
 	cp.OpenInterest += dp.OpenInterest
 }
 
+//=============================================================================
+//===
+//=== Time functions
+//===
 //=============================================================================
 
 func TimeSlotFunction5m(dpTime time.Time) time.Time {

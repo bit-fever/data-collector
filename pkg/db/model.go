@@ -92,17 +92,18 @@ const (
 //-----------------------------------------------------------------------------
 
 type DataInstrument struct {
-	Id               uint         `json:"id" gorm:"primaryKey"`
-	DataProductId    uint         `json:"dataProductId"`
-	DataBlockId     *uint         `json:"dataBlockId"`
-	Symbol           string       `json:"symbol"`
-	Name             string       `json:"name"`
-	ExpirationDate  *time.Time    `json:"expirationDate,omitempty"`
-	RolloverDate    *time.Time    `json:"rolloverDate,omitempty"`
-	Continuous       bool         `json:"continuous"`
-	Month            string       `json:"month"`
-	RolloverDelta    float64      `json:"rolloverDelta"`
-	RolloverStatus   DIRollStatus `json:"rolloverStatus"`
+	Id                uint         `json:"id" gorm:"primaryKey"`
+	DataProductId     uint         `json:"dataProductId"`
+	DataBlockId      *uint         `json:"dataBlockId"`
+	Symbol            string       `json:"symbol"`
+	Name              string       `json:"name"`
+	ExpirationDate   *time.Time    `json:"expirationDate,omitempty"`
+	RolloverDate     *time.Time    `json:"rolloverDate,omitempty"`
+	Continuous        bool         `json:"continuous"`
+	Month             string       `json:"month"`
+	RolloverDelta     float64      `json:"rolloverDelta"`
+	RolloverStatus    DIRollStatus `json:"rolloverStatus"`
+	VirtualInstrument bool         `json:"virtualInstrument"`
 }
 
 //=============================================================================
@@ -201,6 +202,7 @@ type DownloadJob struct {
 	LoadTo            datatype.IntDate `json:"loadTo"`
 	Priority          int              `json:"priority"`
 	UserConnection    string           `json:"userConnection"`
+	ProductTimezone   string           `json:"productTimezone"`
 	CurrDay           int              `json:"currDay"`
 	TotDays           int              `json:"totDays"`
 	Error             string           `json:"error"`

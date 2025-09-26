@@ -66,7 +66,7 @@ func Init(cfg *app.Config) *time.Ticker {
 
 //=============================================================================
 
-func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock, priority int) *db.DownloadJob {
+func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock, priority int, timezone string) *db.DownloadJob {
 	return &db.DownloadJob{
 		DataInstrumentId: di.Id,
 		DataBlockId     : blk.Id,
@@ -76,6 +76,7 @@ func CreateDownloadJob(di *db.DataInstrument, blk *db.DataBlock, priority int) *
 		TotDays         : int(DaysBack),
 		Status          : db.DJStatusWaiting,
 		Priority        : priority,
+		ProductTimezone : timezone,
 	}
 }
 
@@ -140,18 +141,21 @@ func processDataProduct(dp *db.DataProduct) {
 				return errors.New("Cannot add new data instruments : "+ err.Error())
 			}
 
-			if len(jobs) == 0 {
-				//--- If there are no new blocks/jobs to run then the product is ready and we
-				//--- have to send a special message indicating this. If we don't send this message,
-				//--- the recalc will never be triggered
+			err = addVirtualInstrument(tx, dp)
+			if err == nil {
+				err = db.UpdateDataProductFields(tx, dp.Id, db.DPStatusFetchingData)
+				if err == nil {
+					if len(jobs) == 0 {
+						//--- If there are no new blocks/jobs to run then the product is ready and we
+						//--- have to send a special message indicating this. If we don't send this message,
+						//--- the recalc will never be triggered
 
-				err = sendRollRecalcMessage(dp.Id)
-				if err != nil {
-					return err
+						err = sendRollRecalcMessage(dp.Id)
+					}
 				}
 			}
 
-			return db.UpdateDataProductFields(tx, dp.Id, db.DPStatusFetchingData)
+			return err
 		})
 	}
 
@@ -210,7 +214,7 @@ func addDataInstruments(tx *gorm.DB, dp *db.DataProduct, instruments []*db.DataI
 
 		if isNew {
 			var sj *jobmanager.ScheduledJob
-			sj,err = addDownloadJob(tx, block, di)
+			sj,err = addDownloadJob(tx, block, di, dp.Timezone)
 			if err != nil {
 				return nil,err
 			}
@@ -262,8 +266,8 @@ func getOrCreateDataBlock(tx *gorm.DB, dp *db.DataProduct, di *db.DataInstrument
 
 //=============================================================================
 
-func addDownloadJob(tx *gorm.DB, block *db.DataBlock, di *db.DataInstrument) (*jobmanager.ScheduledJob,error) {
-	job := CreateDownloadJob(di, block, 0)
+func addDownloadJob(tx *gorm.DB, block *db.DataBlock, di *db.DataInstrument, timezone string) (*jobmanager.ScheduledJob,error) {
+	job := CreateDownloadJob(di, block, 0, timezone)
 	err := db.AddDownloadJob(tx, job)
 	if err != nil {
 		return nil,err
@@ -300,6 +304,21 @@ func sendRollRecalcMessage(id uint) error {
 	}
 
 	return err
+}
+
+//=============================================================================
+
+func addVirtualInstrument(tx *gorm.DB, dp *db.DataProduct) error {
+	di := &db.DataInstrument{
+		DataProductId    : dp.Id,
+		Symbol           : "#"+ dp.Symbol,
+		Name             : dp.Symbol+" [Virtual instrument]",
+		Continuous       : true,
+		VirtualInstrument: true,
+		RolloverStatus   : db.DIRollStatusWaiting,
+	}
+
+	return db.AddDataInstrument(tx, di)
 }
 
 //=============================================================================
