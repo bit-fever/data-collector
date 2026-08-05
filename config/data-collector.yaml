@@ -3,18 +3,18 @@ application:
   production : false
   debug      : false
 database:
-  address : algotiqa-server:3402
+  address : collector-db:3306
   name    : collector
   username: admin
   password: admin
 authentication:
-  authority   : https://algotiqa-server:8443/auth/realms/algotiqa
+  authority   : https://algotiqa:8443/auth/realms/algotiqa
   clientId    : algotiqa-backend
   clientSecret: PUT_YOUR_KEY_HERE
 platform:
-  system: https://algotiqa-server:8449/api/system
+  system: https://algotiqa:8449/api/system
 messaging:
-  address : algotiqa-server:8450
+  address : rabbitmq:5672
   username: admin
   password: admin
   journal:
@@ -23,7 +23,7 @@ messaging:
     compactMessages: 1000
     dbSpoolInterval: 2
 datastore:
-  address : algotiqa-server:3410
+  address : collector-data:5432
   name    : datastore
   username: admin
   password: admin
