@@ -23,7 +23,7 @@ messaging:
     compactMessages: 1000
     dbSpoolInterval: 2
 datastore:
-  address : collector-data:5432
+  address : collector-ds:5432
   name    : datastore
   username: admin
   password: admin
