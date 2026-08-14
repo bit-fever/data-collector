@@ -1,3 +1,6 @@
 config/*.crt
 config/*.key
+journal/*
 *.iml
+AGENTS.md
+BUGS.md
