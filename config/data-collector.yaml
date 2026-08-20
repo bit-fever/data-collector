@@ -12,7 +12,7 @@ authentication:
   clientId    : algotiqa-backend
   clientSecret: PUT_YOUR_KEY_HERE
 platform:
-  system: https://algotiqa:8449/api/system
+  system: https://system-adapter:8449/api/system
 messaging:
   address : rabbitmq:5672
   username: admin
