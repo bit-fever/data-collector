@@ -7,7 +7,6 @@
 //=== By using this file, you agree to the terms and conditions of that license.
 //=============================================================================
 
-
 package service
 
 import (
@@ -247,8 +246,10 @@ func getBiasSummary(c *auth.Context) {
 	if err == nil {
 		var bsr *business.BiasSummaryResponse
 		var cfg *core.QueryConfig
+
 		err = dbms.RunInTransaction(func(tx *gorm.DB) error {
-			bsr, cfg, err = business.GetBiasSummaryInfo(tx, c, id)
+			sessionConfig := c.GetParamAsString("sessionConfig", "")
+			bsr, cfg, err = business.GetBiasSummaryInfo(tx, c, id, sessionConfig)
 			return err
 		})
 
@@ -273,23 +274,20 @@ func runBacktest(c *auth.Context) {
 	id, err := c.GetIdFromUrl()
 
 	if err == nil {
-		var bts business.BiasBacktestSpec
-		err = c.BindParamsFromBody(&bts)
+		var bbr *business.BiasBacktestResponse
+		var cfg *core.QueryConfig
+		err = dbms.RunInTransaction(func(tx *gorm.DB) error {
+			sessionConfig := c.GetParamAsString("sessionConfig", "")
+			bbr, cfg, err = business.GetBacktestInfo(tx, c, id, sessionConfig)
+			return err
+		})
 
 		if err == nil {
-			var bbr *business.BiasBacktestResponse
-
-			err = dbms.RunInTransaction(func(tx *gorm.DB) error {
-				bbr, err = business.GetBacktestInfo(tx, c, id, &bts)
-				return err
-			})
-
+			spec := createQuerySpec(c, id, cfg)
+			err = business.RunBacktest(c, spec, bbr)
 			if err == nil {
-				err = business.RunBacktest(c, bbr)
-				if err == nil {
-					_ = c.ReturnObject(bbr)
-					return
-				}
+				_ = c.ReturnObject(bbr)
+				return
 			}
 		}
 	}

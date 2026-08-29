@@ -11,14 +11,14 @@
 package business
 
 import (
-	"errors"
+	"strconv"
 	"time"
 
 	"github.com/algotiqa/core/auth"
+	"github.com/algotiqa/core/req"
 	"github.com/algotiqa/data-collector/pkg/core"
 	"github.com/algotiqa/data-collector/pkg/db"
 	"github.com/algotiqa/data-collector/pkg/ds"
-	"github.com/algotiqa/types"
 	"gorm.io/gorm"
 )
 
@@ -29,9 +29,8 @@ import (
 //=============================================================================
 
 type BiasBacktestSpec struct {
-	StopLoss   float64               `json:"stopLoss"`
-	TakeProfit float64               `json:"takeProfit"`
-	Session    *types.TradingSession `json:"session"`
+	StopLoss   float64
+	TakeProfit float64
 }
 
 //=============================================================================
@@ -41,7 +40,6 @@ type BiasBacktestResponse struct {
 	BrokerProduct     *db.BrokerProduct   `json:"brokerProduct"`
 	Spec              *BiasBacktestSpec   `json:"spec"`
 	BacktestedConfigs []*BacktestedConfig `json:"backtestedConfigs"`
-	config            *core.QueryConfig
 }
 
 //=============================================================================
@@ -50,75 +48,80 @@ type BiasBacktestResponse struct {
 //===
 //=============================================================================
 
-func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, spec *BiasBacktestSpec) (*BiasBacktestResponse, error) {
+func GetBacktestInfo(tx *gorm.DB, c *auth.Context, id uint, sessionConfig string) (*BiasBacktestResponse, *core.QueryConfig, error) {
 	c.Log.Info("GetBacktestInfo: Getting bias analysis and configs for backtest", "id", id)
 
 	ba, err := getBiasAnalysisAndCheckAccess(tx, c, id, "GetBacktestInfo")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	biasConfigs, err2 := GetBiasConfigsByAnalysisId(tx, c, id)
 	if err2 != nil {
 		c.Log.Error("GetBacktestInfo: Could not retrieve bias configs", "error", err.Error())
-		return nil, err2
+		return nil, nil, err2
 	}
 
 	var config *core.QueryConfig
-	config, err = CreateQueryConfig(tx, ba.DataInstrumentId, "")
+	config, err = CreateQueryConfig(tx, ba.DataInstrumentId, sessionConfig)
 	if err != nil {
 		c.Log.Error("GetBacktestInfo: Could not create data config", "error", err.Error())
-		return nil, err
+		return nil, nil, err
 	}
 
 	var bp *db.BrokerProduct
 	bp, err = db.GetBrokerProductById(tx, ba.BrokerProductId)
 	if err != nil {
 		c.Log.Error("GetBacktestInfo: Could not retrieve broker product", "error", err.Error())
-		return nil, err
+		return nil, nil, err
 	}
 
 	var btConfigs []*BacktestedConfig
 
 	for _, bc := range *biasConfigs {
-		btc, err := NewBacktestedConfig(bc, bp, spec)
+		btc, err := NewBacktestedConfig(bc, bp)
 		if err != nil {
 			c.Log.Error("GetBacktestInfo: Could not build backtested config", "error", err.Error())
-			return nil, err
+			return nil, nil, err
 		}
 
 		btConfigs = append(btConfigs, btc)
 	}
 
-	err = checkSpec(c, spec)
+	spec, err := createSpec(c)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	return &BiasBacktestResponse{
-		BiasAnalysis:      ba,
-		BrokerProduct:     bp,
-		Spec:              spec,
+		BiasAnalysis     : ba,
+		BrokerProduct    : bp,
 		BacktestedConfigs: btConfigs,
-		config:            config,
-	}, nil
+		Spec             : spec,
+	}, config, nil
 }
 
 //=============================================================================
 
-func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
+func RunBacktest(c *auth.Context, spec *QuerySpec, bbr *BiasBacktestResponse) error {
 	c.Log.Info("RunBacktest: Starting backtest for bias analysis", "id", bbr.BiasAnalysis.Id)
 
-	loc, _ := time.LoadLocation(bbr.config.DataProduct.Timezone)
-	da  := ds.NewSimpleAggregator(ds.NewQuantizer15mTo30m())
-	err := ds.GetDataPoints(nil, nil, bbr.config.DataConfig, loc, da, 0)
+	spec.Timeframe = "30"
+	spec.Timezone  = ""
 
+	params, err := NewQueryParams(spec)
 	if err != nil {
-		c.Log.Error("RunBacktest: Could not retrieve data points", "error", err.Error())
-		return err
+		return req.NewBadRequestError(err.Error())
 	}
 
-	dataPoints := da.DataPoints()
+	params.Aggregator = ds.NewSimpleAggregator(ds.NewQuantizer15mTo30m())
+	params.Reduction  = 0
+	params.Limit      = 0
+
+	dataPoints, err := getDataPoints(params, spec.Config)
+	if err != nil {
+		return err
+	}
 
 	for i, dp := range dataPoints {
 		if i > 0 {
@@ -126,7 +129,7 @@ func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 			ti := calcTimeInfo(dp)
 
 			for _, btc := range bbr.BacktestedConfigs {
-				btc.RunBacktest(ti, dp, prevDp, i, dataPoints)
+				btc.RunBacktest(ti, dp, prevDp, i, dataPoints, bbr.Spec)
 			}
 		}
 	}
@@ -144,22 +147,39 @@ func RunBacktest(c *auth.Context, bbr *BiasBacktestResponse) error {
 //===
 //=============================================================================
 
-func checkSpec(c *auth.Context, bts *BiasBacktestSpec) error {
-	var err error
-
-	if bts.StopLoss < 0 {
-		err = errors.New("stopLoss cannot be negative")
-		c.Log.Error("createParams: Invalid stopLoss", "error", err.Error())
-		return err
+func createSpec(c *auth.Context) (*BiasBacktestSpec, error) {
+	stopLoss  ,errL := getMandatoryValue(c,"stopLoss")
+	takeProfit,errP := getMandatoryValue(c,"takeProfit")
+	if errL != nil {
+		return nil,errL
+	}
+	if errP != nil {
+		return nil,errP
 	}
 
-	if bts.TakeProfit < 0 {
-		err = errors.New("takeProfit cannot be negative")
-		c.Log.Error("createParams: Invalid takeProfit", "error", err.Error())
-		return err
+	if stopLoss < 0 {
+		return nil,req.NewBadRequestError("stopLoss cannot be negative: %v", stopLoss)
 	}
 
-	return nil
+	if takeProfit < 0 {
+		return nil,req.NewBadRequestError("takeProfit cannot be negative: %v", takeProfit)
+	}
+
+	return &BiasBacktestSpec{
+		StopLoss  : stopLoss,
+		TakeProfit: takeProfit,
+	}, nil
+}
+
+//=============================================================================
+
+func getMandatoryValue(c *auth.Context, name string) (float64,error) {
+	sValue := c.GetParamAsString(name, "")
+	if sValue == "" {
+		return 0, req.NewBadRequestError("Missing '%v' parameter", name)
+	}
+
+	return strconv.ParseFloat(sValue, 64)
 }
 
 //=============================================================================
@@ -177,9 +197,9 @@ func calcTimeInfo(dp *ds.DataPoint) *TimeInfo {
 
 	return &TimeInfo{
 		dayOfWeek: int16(dow),
-		slot:      int16(slot),
-		month:     int16(month),
-		year:      int16(year),
+		slot     : int16(slot),
+		month    : int16(month),
+		year     : int16(year),
 	}
 }
 

@@ -11,11 +11,12 @@
 package business
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/algotiqa/data-collector/pkg/core"
 	"github.com/algotiqa/data-collector/pkg/db"
 	"github.com/algotiqa/data-collector/pkg/ds"
-	"strconv"
-	"time"
 )
 
 //=============================================================================
@@ -48,20 +49,20 @@ type BiasTrade struct {
 
 //=============================================================================
 
-func NewBiasTrade(currDp, prevDp *ds.DataPoint, btc *BacktestedConfig) *BiasTrade {
-	entryValue := prevDp.Close
-	stopValue := 0.0
+func NewBiasTrade(currDp, prevDp *ds.DataPoint, btc *BacktestedConfig, spec *BiasBacktestSpec) *BiasTrade {
+	entryValue  := prevDp.Close
+	stopValue   := 0.0
 	profitValue := 0.0
 
-	stopDelta := btc.spec.StopLoss / float64(btc.brokerProduct.PointValue)
-	profitDelta := btc.spec.TakeProfit / float64(btc.brokerProduct.PointValue)
+	stopDelta   := spec.StopLoss / float64(btc.brokerProduct.PointValue)
+	profitDelta := spec.TakeProfit / float64(btc.brokerProduct.PointValue)
 
 	switch btc.BiasConfig.Operation {
 	case 0:
-		stopValue = entryValue - stopDelta
+		stopValue   = entryValue - stopDelta
 		profitValue = entryValue + profitDelta
 	case 1:
-		stopValue = entryValue + stopDelta
+		stopValue   = entryValue + stopDelta
 		profitValue = entryValue - profitDelta
 
 	default:
@@ -77,10 +78,10 @@ func NewBiasTrade(currDp, prevDp *ds.DataPoint, btc *BacktestedConfig) *BiasTrad
 	}
 
 	bt := &BiasTrade{
-		EntryTime:   currDp.Time.Add(-time.Minute * 30),
-		EntryValue:  entryValue,
-		Operation:   btc.BiasConfig.Operation,
-		stopValue:   stopValue,
+		EntryTime  : currDp.Time.Add(-time.Minute * 30),
+		EntryValue : entryValue,
+		Operation  : btc.BiasConfig.Operation,
+		stopValue  : stopValue,
 		profitValue: profitValue,
 	}
 

@@ -11,11 +11,12 @@
 package business
 
 import (
+	"math"
+	"time"
+
 	"github.com/algotiqa/data-collector/pkg/core"
 	"github.com/algotiqa/data-collector/pkg/db"
 	"github.com/algotiqa/data-collector/pkg/ds"
-	"math"
-	"time"
 )
 
 //=============================================================================
@@ -44,23 +45,22 @@ type BacktestedConfig struct {
 	currTrade     *BiasTrade
 	excludedSet   *ExcludedSet
 	brokerProduct *db.BrokerProduct
-	spec          *BiasBacktestSpec
+//	spec          *BiasBacktestSpec
 }
 
 //=============================================================================
 //=== Constructor
 //=============================================================================
 
-func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct, spec *BiasBacktestSpec) (*BacktestedConfig, error) {
+func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct) (*BacktestedConfig, error) {
 	es, err := NewExcludedSet(bc.Excludes)
 
 	return &BacktestedConfig{
-		BiasConfig:    bc,
-		Trades:        []*BiasTrade{},
-		Sequences:     []*TriggeringSequence{},
-		excludedSet:   es,
+		BiasConfig   : bc,
+		Trades       : []*BiasTrade{},
+		Sequences    : []*TriggeringSequence{},
+		excludedSet  : es,
 		brokerProduct: bp,
-		spec:          spec,
 	}, err
 }
 
@@ -68,13 +68,14 @@ func NewBacktestedConfig(bc *BiasConfig, bp *db.BrokerProduct, spec *BiasBacktes
 //=== Methods
 //=============================================================================
 
-func (btc *BacktestedConfig) RunBacktest(ti *TimeInfo, currDp *ds.DataPoint, prevDp *ds.DataPoint, i int, dataPoints []*ds.DataPoint) {
+func (btc *BacktestedConfig) RunBacktest(ti *TimeInfo, currDp *ds.DataPoint, prevDp *ds.DataPoint,
+										 i int, dataPoints []*ds.DataPoint, spec *BiasBacktestSpec) {
 	if btc.currTrade == nil {
 		//--- Check if we can start a new trade
 
 		if btc.IsDayAllowed(ti) {
 			if btc.IsStartOfTrade(ti) {
-				btc.StartTrade(currDp, prevDp, i, dataPoints)
+				btc.StartTrade(currDp, prevDp, i, dataPoints, spec)
 			}
 		}
 	}
@@ -114,9 +115,10 @@ func (btc *BacktestedConfig) IsEndOfTrade(ti *TimeInfo) bool {
 
 //=============================================================================
 
-func (btc *BacktestedConfig) StartTrade(currDp, prevDp *ds.DataPoint, index int, dataPoints []*ds.DataPoint) {
+func (btc *BacktestedConfig) StartTrade(currDp, prevDp *ds.DataPoint, index int,
+										dataPoints []*ds.DataPoint, spec *BiasBacktestSpec) {
 	btc.Sequences = append(btc.Sequences, NewTriggeringSequence(index, dataPoints, SlotNum))
-	btc.currTrade = NewBiasTrade(currDp, prevDp, btc)
+	btc.currTrade = NewBiasTrade(currDp, prevDp, btc, spec)
 }
 
 //=============================================================================

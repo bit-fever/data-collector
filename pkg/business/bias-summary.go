@@ -96,7 +96,7 @@ type DataPointEntry struct {
 
 //=============================================================================
 
-func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResponse, *core.QueryConfig, error) {
+func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint, sessionConfig string) (*BiasSummaryResponse, *core.QueryConfig, error) {
 	c.Log.Info("GetBiasSummary: Getting bias analysis", "id", id)
 
 	ba, err := db.GetBiasAnalysisById(tx, id)
@@ -109,7 +109,7 @@ func GetBiasSummaryInfo(tx *gorm.DB, c *auth.Context, id uint) (*BiasSummaryResp
 	}
 
 	var config *core.QueryConfig
-	config, err = CreateQueryConfig(tx, ba.DataInstrumentId, "")
+	config, err = CreateQueryConfig(tx, ba.DataInstrumentId, sessionConfig)
 	if err != nil {
 		return nil, nil, err
 	}

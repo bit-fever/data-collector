@@ -35,7 +35,6 @@ type QuerySpec struct {
 	Timeframe string
 	Reduction string
 	Limit     string
-	SessionId uint
 	Config    *core.QueryConfig
 }
 

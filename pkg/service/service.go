@@ -43,7 +43,7 @@ func Init(router *gin.Engine, cfg *app.Config, logger *slog.Logger) {
 	router.PUT   ("/api/collector/v1/bias-analyses/:id",              ctrl.Secure(updateBiasAnalysis,  roles.Admin_User_Service))
 	router.DELETE("/api/collector/v1/bias-analyses/:id",              ctrl.Secure(deleteBiasAnalysis,  roles.Admin_User_Service))
 	router.GET   ("/api/collector/v1/bias-analyses/:id/summary",      ctrl.Secure(getBiasSummary,      roles.Admin_User_Service))
-	router.POST  ("/api/collector/v1/bias-analyses/:id/backtest",     ctrl.Secure(runBacktest,         roles.Admin_User_Service))
+	router.GET   ("/api/collector/v1/bias-analyses/:id/backtest",     ctrl.Secure(runBacktest,         roles.Admin_User_Service))
 
 	router.GET   ("/api/collector/v1/bias-analyses/:id/configs",      ctrl.Secure(getBiasConfigsByAnalysisId, roles.Admin_User_Service))
 	router.POST  ("/api/collector/v1/bias-analyses/:id/configs",      ctrl.Secure(addBiasConfig,              roles.Admin_User_Service))
